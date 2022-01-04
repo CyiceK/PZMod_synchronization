@@ -9,6 +9,7 @@ class PlayerSaveConversionServiceSave:
     def __init__(self):
         self.modname_and_steamid = dict()
         self.modid_and_steamid = dict()
+        self.steamid_and_modname = dict()
         self.read_list = []
         self.mods_dict = dict()
         self.ini_data = ""
@@ -56,8 +57,12 @@ class PlayerSaveConversionServiceSave:
             if os.path.isdir(self.mods_dir + "//" + i):
                 # print(os.listdir(self.mods_dir + "//" + i + "//mods"))
                 mods_name = os.listdir(self.mods_dir + "//" + i + "//mods")
-                self.modname_and_steamid[mods_name[0]] = i
-        # print(self.modname_and_steamid)
+                # print(mods_name, " ", i)
+                for mod_name in mods_name:
+                    self.modname_and_steamid[mod_name] = i
+                self.steamid_and_modname[i] = mods_name
+            # print(self.modname_and_steamid)
+            # print(self.steamid_and_modname)
         return self.modname_and_steamid
 
     def get_modid_and_steamid(self):
@@ -66,16 +71,17 @@ class PlayerSaveConversionServiceSave:
             if os.path.isdir(self.mods_dir + "//" + i):
                 # print(os.listdir(self.mods_dir + "//" + i + "//mods"))
                 mods_name = os.listdir(self.mods_dir + "//" + i + "//mods")
-                with open(self.mods_dir + "//" + i + "//mods" + "//" + mods_name[0] + "//mod.info", "r",
-                          encoding="utf-8") as f:
-                    read_list = f.readlines()
-                    for j in read_list:
-                        j = j.replace("\n", "")
-                        j_list = j.split("=")
-                        if j_list[0] == "id":
-                            # print(j_list)
-                            self.modid_and_steamid[j_list[1]] = i
-        # print(self.modid_and_steamid)
+                for mod_name in mods_name:
+                    with open(self.mods_dir + "//" + i + "//mods" + "//" + mod_name + "//mod.info", "r",
+                              encoding="utf-8") as f:
+                        read_list = f.readlines()
+                        for j in read_list:
+                            j = j.replace("\n", "")
+                            j_list = j.split("=")
+                            if j_list[0] == "id":
+                                # print(j_list)
+                                self.modid_and_steamid[j_list[1]] = i
+            # print(self.modid_and_steamid)
         return self.modid_and_steamid
 
     def rw_service_ini(self):
@@ -92,7 +98,8 @@ class PlayerSaveConversionServiceSave:
                     for j in self.mods_dict.get("mods"):
                         if self.modid_and_steamid.get(j) is None:
                             # 缺失的mod
-                            print(f"MOD名:\033[1;33;47m{j}\033[0m 状态：【\033[5;31;47m缺失\033[0m】")
+                            # print(self.modname_and_steamid)
+                            print(f">同步的MOD名:\033[1;33;47m{j}\033[0m 状态：【\033[5;31;47m缺失\033[0m】<")
                             continue
                         write_Mods_data += j + ";"
                         write_WorkshopItems_data += self.modid_and_steamid.get(j) + ";"
@@ -110,7 +117,7 @@ class PlayerSaveConversionServiceSave:
         else:
             with open(self.user_save_path + "/servertest.ini", "w+") as f:
                 f.writelines(self.ini_data)
-        print("保存成功！")
+        print(">保存成功！")
 
     def read_ini(self):
         conf = configparser.ConfigParser()
@@ -143,8 +150,9 @@ class PlayerSaveConversionServiceSave:
     def menu(self):
         while True:
             self.read_ini()
-            cmd_list = ["填入路径", "查询路径", "生成", "退出"]
+            cmd_list = ["填入路径", "查询路径", "生成到服务器", "退出程序"]
             version = "Ver 0.2"
+            print("")
             print(f"========存档MOD与服务器MOD同步工具{version}==========")
             print("========Write By:CyiceK==========")
             for i in range(0, len(cmd_list)):
@@ -159,11 +167,11 @@ class PlayerSaveConversionServiceSave:
                 self.show_path()
             elif user_input == "3":
                 self.rw_service_ini()
-                user_input = input("是否保存？【Y/N(任意)】")
+                user_input = input(">>是否保存？【Y/N(任意)】")
                 if user_input == "Y":
                     self.save_ini()
                 else:
-                    print("不保存")
+                    print(">不保存")
                     continue
             elif user_input == "4":
                 exit(0)
