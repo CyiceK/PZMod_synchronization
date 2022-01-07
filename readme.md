@@ -30,6 +30,21 @@ Python3.6~3.8
 
 2.python remake_mods.py
 
+3.PZT配置
+
+```ini
+[pathconfig]
+# F:\Program Files (x86)\Steam\steamapps\common\Project Zomboid Dedicated Server\steamapps\workshop\content\
+workshop_path = 你客户端/服务端放MOD的位置，注意是要下载好并且完整的，不然找不到steam_workshop_id。
+#  C:\Users\KLest\
+my_document = 我的文档位置，用于找存档
+# 108600
+steam_id = steam_appid
+user_save_path = 用户自定义输出位置
+```
+
+
+
 ## 开源协议
 
 GPLV3

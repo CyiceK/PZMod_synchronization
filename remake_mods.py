@@ -10,24 +10,24 @@ class PlayerSaveConversionServiceSave:
         self.modname_and_steamid = dict()
         self.modid_and_steamid = dict()
         self.steamid_and_modname = dict()
-        self.read_list = []
         self.mods_dict = dict()
+        self.read_list = []
         self.ini_data = ""
         self.steam_id = 380870
-        self.workshop_path = "F:\Program Files (x86)\Steam\steamapps\common\Project Zomboid Dedicated Server\steamapps\workshop\content\\"
-        self.saved_path = "\Zomboid"
-        self.my_document = "F:\python\PZ" + self.saved_path
-        self.mods_dir = f"{self.workshop_path}{self.steam_id}".replace("\\", "//")
+        self.workshop_path = "F:/Program Files (x86)/Steam/steamapps/common/Project Zomboid Dedicated Server/steamapps/workshop/content//"
+        self.saved_path = "/Zomboid"
+        self.my_document = "F:/python/PZ" + self.saved_path
+        self.mods_dir = f"{self.workshop_path}{self.steam_id}".replace("//", "//")
         self.user_save_path = ""
 
     def read_player_mods(self):
-        with open(self.my_document + "\mods\default.txt", "r", encoding="utf-8") as f:
+        with open(self.my_document + "/mods/default.txt", "r", encoding="utf-8") as f:
             r_data = f.readlines()
             # print(r_data)
             read_key = None
             start_sw = False
             for dataline in r_data:
-                # print(i.replace("\n",""))
+                # print(i.replace("/n",""))
                 dataline = dataline.replace("\n", "").replace("\t", "")
                 # 识别版本
                 if dataline.split("=")[0] == "VERSION ":
@@ -95,12 +95,18 @@ class PlayerSaveConversionServiceSave:
                 if i_list[0] == "Mods":
                     write_Mods_data = ""
                     write_WorkshopItems_data = ""
+                    print("===按模块启用顺序排列===")
+                    print("启用顺序是根据您模块点击开启排序，先开先启用原则")
                     for j in self.mods_dict.get("mods"):
                         if self.modid_and_steamid.get(j) is None:
                             # 缺失的mod
                             # print(self.modname_and_steamid)
-                            print(f">同步的MOD名:\033[1;33;47m{j}\033[0m 状态：【\033[5;31;47m缺失\033[0m】<")
+                            print(
+                                f">同步的MOD名:\033[1;31;40m{j:<30}\t\033[0mID:\033[1;31;40m{self.modid_and_steamid.get(j)}\t\033[0m状态：【\033[5;31;47m缺失\033[0m】<")
                             continue
+                        else:
+                            print(
+                                f">同步的MOD名:\033[0;32;40m{j:<30}\t\033[0mID:\033[1;33;40m{self.modid_and_steamid.get(j)}\t\033[0m状态：【\033[0;32;47m成功\033[0m】<")
                         write_Mods_data += j + ";"
                         write_WorkshopItems_data += self.modid_and_steamid.get(j) + ";"
                     # print(ini_data[ini_data.index(i)])
@@ -123,24 +129,27 @@ class PlayerSaveConversionServiceSave:
         conf = configparser.ConfigParser()
         conf.read('./PZT.ini')
 
-        self.workshop_path = conf.get("pathconfig", 'workshop_path')
-        self.my_document = conf.get("pathconfig", "my_document") + self.saved_path
+        self.workshop_path = conf.get("pathconfig", 'workshop_path') + "//"
+        self.my_document = conf.get("pathconfig", "my_document") + self.saved_path + "//"
         self.steam_id = conf.getint("pathconfig", "steam_id")
         self.user_save_path = conf.get("pathconfig", "user_save_path")
+        if self.user_save_path != "":
+            self.user_save_path += "//"
 
-        self.mods_dir = f"{self.workshop_path}{self.steam_id}".replace("\\", "//")
+        self.mods_dir = f"{self.workshop_path}{self.steam_id}".replace("//", "//")
 
     def set_path(self):
         print(f"示例:{self.workshop_path}")
-        self.workshop_path = input("输入创意工坊Mod路径：")
+        self.workshop_path = input("输入创意工坊Mod路径：") + "//"
         print(f"示例:{self.my_document}")
-        self.my_document = input("输入我的文档路径：") + self.saved_path
+        self.my_document = input("输入我的文档路径：") + self.saved_path + "//"
         print(f"示例:{self.steam_id}")
         self.steam_id = int(input("输入SteamId："))
         print(f"示例:{self.user_save_path}")
-        self.user_save_path = input("输入用户保存ini配置的路径：")
+        self.user_save_path = input("输入用户保存ini配置的路径：") + "//"
 
     def show_path(self):
+        self.read_ini()
         print(f"SteamId:{self.steam_id}")
         print(f"创意工坊Mod路径:{self.workshop_path}")
         print(f"我的文档路径:{self.my_document}")
@@ -151,8 +160,8 @@ class PlayerSaveConversionServiceSave:
         while True:
             self.read_ini()
             cmd_list = ["填入路径", "查询路径", "生成到服务器", "退出程序"]
-            version = "Ver 0.2"
-            print("")
+            version = "Ver 0.3"
+            print(" ")
             print(f"========存档MOD与服务器MOD同步工具{version}==========")
             print("========Write By:CyiceK==========")
             for i in range(0, len(cmd_list)):
@@ -179,4 +188,8 @@ class PlayerSaveConversionServiceSave:
 
 if __name__ == "__main__":
     pz = PlayerSaveConversionServiceSave()
-    pz.menu()
+    try:
+        pz.menu()
+    except FileNotFoundError as e:
+        print("文件未找到:", e)
+        os.system("pause")
