@@ -20,6 +20,8 @@ Python3.6~3.8
 
 客户端下载好的mod
 
+理论上支持Mac/Windows/Linux，但推荐Windows/Mac
+
 ## 计划
 
 - [ ] Vue前端，能够显示文件图片，介绍，能够跳转Steam工坊页面【大概率不会做，项目太小了（】
@@ -35,7 +37,7 @@ Python3.6~3.8
 ```ini
 [pathconfig]
 # F:\Program Files (x86)\Steam\steamapps\common\Project Zomboid Dedicated Server\steamapps\workshop\content\
-workshop_path = 你客户端/服务端放MOD的位置，注意是要下载好并且完整的，不然找不到steam_workshop_id。
+workshop_path = 你客户端/服务端放MOD的位置，注意是要下载好所有MOD并且完整的，不然找不到steam_workshop_id。
 #  C:\Users\KLest\
 my_document = 我的文档位置，用于找存档
 # 108600
