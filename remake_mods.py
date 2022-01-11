@@ -14,6 +14,9 @@ class PlayerSaveConversionServiceSave:
         self.read_list = []
         self.ini_data = ""
         self.steam_id = 380870
+        self.link_A = ""
+        self.link_B = ""
+        self.link_document = ""
         self.workshop_path = "F:/Program Files (x86)/Steam/steamapps/common/Project Zomboid Dedicated Server/steamapps/workshop/content//"
         self.saved_path = "/Zomboid"
         self.my_document = "F:/python/PZ" + self.saved_path
@@ -116,6 +119,20 @@ class PlayerSaveConversionServiceSave:
                 elif i_list[0] == "WorkshopItems":
                     self.ini_data[self.ini_data.index(i)] = "WorkshopItems=" + write_WorkshopItems_data[:-1] + "\n"
 
+    def build_soft_link(self):
+        self.read_ini()
+        print("A_B目录下的结构推荐要一致")
+        print("1.Windows 2.Linux 3.Mac[不支持]")
+        user_chose = input("选择你的操作系统类型:")
+        if user_chose == "1":
+            # print(f'mklink /J "{self.link_A}" "{self.link_B}"')
+            os.system(f'mklink /J "{self.link_A}" "{self.link_B}"')
+        elif user_chose == "2":
+            # print(f'ln -sT "{self.link_B}" "{self.link_A}"')
+            os.system(f'ln -sT "{self.link_B}" "{self.link_A}"')
+        else:
+            print(">所选系统不支持")
+
     def save_ini(self):
         if self.user_save_path == "":
             with open(self.my_document + "/Server/servertest.ini", "w+") as f:
@@ -136,7 +153,10 @@ class PlayerSaveConversionServiceSave:
         if self.user_save_path != "":
             self.user_save_path += "//"
 
-        self.mods_dir = f"{self.workshop_path}{self.steam_id}".replace("//", "//")
+        self.mods_dir = f"{self.workshop_path}{self.steam_id}".replace("\\", "//")
+        self.link_document = conf.get("pathconfig", "link_document")
+        self.link_A = conf.get("pathconfig", "link_A") + "//" + self.link_document
+        self.link_B = conf.get("pathconfig", "link_B") + "//" + self.link_document
 
     def set_path(self):
         print(f"示例:{self.workshop_path}")
@@ -159,8 +179,8 @@ class PlayerSaveConversionServiceSave:
     def menu(self):
         while True:
             self.read_ini()
-            cmd_list = ["填入路径", "查询路径", "生成到服务器", "退出程序"]
-            version = "Ver 0.3"
+            cmd_list = ["填入临时路径", "查询路径", "生成到服务器", "建立链接", "退出程序"]
+            version = "Ver 0.4"
             print(" ")
             print(f"========存档MOD与服务器MOD同步工具{version}==========")
             print("========Write By:CyiceK==========")
@@ -183,6 +203,8 @@ class PlayerSaveConversionServiceSave:
                     print(">不保存")
                     continue
             elif user_input == "4":
+                self.build_soft_link()
+            elif user_input == "5":
                 exit(0)
 
 
@@ -192,4 +214,7 @@ if __name__ == "__main__":
         pz.menu()
     except FileNotFoundError as e:
         print("文件未找到:", e)
+        os.system("pause")
+    except Exception as e:
+        print("致命错误:", e)
         os.system("pause")
