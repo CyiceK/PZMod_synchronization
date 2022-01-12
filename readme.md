@@ -45,7 +45,7 @@ steam_id = steam_appid
 user_save_path = 用户自定义输出位置
 # F:\Program Files (x86)\Steam\steamapps\common\Project Zomboid Dedicated Server\steamapps\
 link_A = 分身路径，我从本体拿东西但我本身不占相同空间
-# F:\Program Files (x86)\Steam\steamapps\workshop\
+# F:\Program Files (x86)\Steam\steamapps\
 link_B = 本体路径，我提供给分身东西我是母体，我占用主要空间
 # workshop
 link_document = 要同步的文件夹名字，该文件夹会存在A_B各一份
