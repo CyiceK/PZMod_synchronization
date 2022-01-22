@@ -1,9 +1,11 @@
 # -*- coding:utf-8 -*-
 import configparser
+import json
 import os
 
-
 # sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='gb18030')
+import shutil
+
 
 class PlayerSaveConversionServiceSave:
     def __init__(self):
@@ -11,6 +13,8 @@ class PlayerSaveConversionServiceSave:
         self.modid_and_steamid = dict()
         self.steamid_and_modname = dict()
         self.mods_dict = dict()
+        self.modfile_info = dict()
+        self.web_modfile_info = dict()
         self.read_list = []
         self.ini_data = ""
         self.steam_id = 380870
@@ -75,17 +79,160 @@ class PlayerSaveConversionServiceSave:
                 # print(os.listdir(self.mods_dir + "//" + i + "//mods"))
                 mods_name = os.listdir(self.mods_dir + "//" + i + "//mods")
                 for mod_name in mods_name:
-                    with open(self.mods_dir + "//" + i + "//mods" + "//" + mod_name + "//mod.info", "r",
-                              encoding="utf-8") as f:
-                        read_list = f.readlines()
-                        for j in read_list:
-                            j = j.replace("\n", "")
-                            j_list = j.split("=")
-                            if j_list[0] == "id":
-                                # print(j_list)
-                                self.modid_and_steamid[j_list[1]] = i
+                    try:
+                        with open(self.mods_dir + "//" + i + "//mods" + "//" + mod_name + "//mod.info", "r",
+                                  encoding="utf-8") as f:
+                            read_list = f.readlines()
+                            for j in read_list:
+                                j = j.replace("\n", "")
+                                j_list = j.split("=")
+                                if j_list[0] == "id":
+                                    # print(j_list)
+                                    self.modid_and_steamid[j_list[1]] = i
+                    except FileNotFoundError:
+                        continue
             # print(self.modid_and_steamid)
         return self.modid_and_steamid
+
+    def get_modfile_info(self):
+        for i in os.listdir(self.mods_dir):
+            # print(i)
+            id_key = "init"
+            if os.path.isdir(self.mods_dir + "//" + i):
+                # print(os.listdir(self.mods_dir + "//" + i + "//mods"))
+                mods_name = os.listdir(self.mods_dir + "//" + i + "//mods")
+                for mod_name in mods_name:
+                    try:
+                        with open(self.mods_dir + "//" + i + "//mods" + "//" + mod_name + "//mod.info", "r",
+                                  encoding="utf-8") as f:
+                            read_list = f.readlines()
+                            for j in read_list:
+                                j = j.replace("\n", "")
+                                j_list = j.split("=")
+                                # print(j_list)
+                                if j_list[0] == "id":
+                                    id_key = j_list[1]
+                                    self.modfile_info[id_key] = {}
+                                    self.modfile_info[id_key].setdefault("steam_workshop_id",
+                                                                         [self.modid_and_steamid.get(id_key)])
+                            # 有些作者喜欢把id放到很后面
+                            for j in read_list:
+                                j = j.replace("\n", "")
+                                j_list = j.split("=")
+
+                                if len(j_list) < 2 or id_key == "init":
+                                    continue
+
+                                if j_list[0] == "poster":
+                                    if j_list[1] != "":
+                                        if not os.path.exists(
+                                                "./img/" + str(self.modid_and_steamid.get(id_key))):
+                                            os.mkdir("./img/" + str(self.modid_and_steamid.get(id_key)))
+                                        if not os.path.exists("./img/" + str(
+                                                self.modid_and_steamid.get(id_key)) + "//" + mod_name):
+                                            os.mkdir(
+                                                "./img/" + str(self.modid_and_steamid.get(id_key)) + "//" + mod_name)
+                                        if not os.path.exists("./img/" + str(self.modid_and_steamid.get(id_key)) + "//" + mod_name+ "//" + j_list[
+                                                    1]):
+                                            shutil.copy(
+                                                (self.mods_dir + "//" + i + "//mods" + "//" + mod_name) + "//" + j_list[
+                                                    1],
+                                                "./img/" + str(self.modid_and_steamid.get(id_key)) + "//" + mod_name)
+
+                                        j_list[1] = "./img/" + str(
+                                            self.modid_and_steamid.get(id_key)) + "//" + mod_name + "//" + j_list[
+                                                        1]
+
+                                if j_list[0] == "require":
+                                    j_list[1] = j_list[1].split(',')
+
+                                self.modfile_info[id_key].setdefault(j_list[0], [])
+                                if type(j_list[1]) is list:
+                                    for tmp_data in j_list[1]:
+                                        self.modfile_info[id_key][j_list[0]].append(tmp_data)
+                                else:
+                                    self.modfile_info[id_key][j_list[0]].append(j_list[1])
+                                # if j_list[0] == "id":
+                                #     # print(j_list)
+                                #     self.modfile_info[j_list[1]] = i
+                    except FileNotFoundError:
+                        continue
+        # print(self.modfile_info)
+        with open('old_data.json', 'w') as f:
+            json.dump(self.modfile_info, f, indent=4)
+
+    def web_get_modfile_info(self):
+        with open('old_data.json', 'r') as f:
+            self.modfile_info = json.load(f)
+
+        save_list = []
+        del_list = []
+        id = 0
+        for i in self.modfile_info:
+            modinfo_value = self.modfile_info.get(i)
+            if modinfo_value.get("poster") is not None:
+                if len(modinfo_value.get("poster")) != 0:
+                    pic_dir = modinfo_value.get("poster")[0]
+            else:
+                pic_dir = "null"
+
+            if modinfo_value.get("require") is not None:
+                if len(modinfo_value.get("require")) != 0:
+                    require = modinfo_value.get("require")
+            else:
+                require = "null"
+            data = {
+                "id": id,
+                "parent_id": 0,
+                "order": id,
+                "pic": f'<img width=100px height=100px src="{pic_dir}"/>',
+                "modid": i,
+                "require": require,
+                "workshopid": f'<a href="https://steamcommunity.com/sharedfiles/filedetails/?id='
+                              f'{modinfo_value.get("steam_workshop_id")[0]}">{modinfo_value.get("steam_workshop_id")[0]}</a>',
+                # "children": []
+            }
+            save_list.append(data)
+            id += 1
+
+        for i_index in range(len(save_list)):
+            if save_list[i_index].get("require") != "null":
+                save_list[i_index]["backgroundColor"] = "#FF0000"
+                require_len = len(save_list[i_index].get("require"))
+                count = 0
+                for j_index in range(len(save_list)):
+                    for require in save_list[i_index].get("require"):
+                        if save_list[j_index].get("modid") == require:
+                            count += 1
+                            if save_list[i_index]["parent_id"] == 0:
+                                save_list[i_index]["parent_id"] = save_list[j_index].get("id")
+                                save_list[i_index]["backgroundColor"] = "#00FF99"
+                                save_list[j_index].setdefault("children", [])
+                                save_list[j_index].get("children").append(save_list[i_index])
+                                del_list.append(i_index)
+                                # 表格不给父子同级啊（恼
+                                continue
+                if count != require_len:
+                    print("红了",count," ",require_len)
+                    print(save_list[i_index].get("require"))
+                    save_list[i_index]["backgroundColor"] = "#FF0000"
+
+        for del_index in del_list:
+            save_list[del_index] = None
+
+        i = 0
+        while i < len(save_list):
+            if save_list[i] is None:
+                save_list.pop(i)
+                i -= 1
+            else:
+                # print(save_list[i])
+                pass
+
+            i += 1
+
+        with open('data.json', 'w') as f:
+            json.dump(save_list, f, indent=4)
 
     def rw_service_ini(self):
         self.read_player_mods()
@@ -98,6 +245,7 @@ class PlayerSaveConversionServiceSave:
                 if i_list[0] == "Mods":
                     write_Mods_data = ""
                     write_WorkshopItems_data = ""
+                    writed_WorkshopItems_data = []
                     print("===按模块启用顺序排列===")
                     print("启用顺序是根据您模块点击开启排序，先开先启用原则")
                     for j in self.mods_dict.get("mods"):
@@ -111,7 +259,9 @@ class PlayerSaveConversionServiceSave:
                             print(
                                 f">同步的MOD名:\033[0;32;40m{j:<30}\t\033[0mID:\033[1;33;40m{self.modid_and_steamid.get(j)}\t\033[0m状态：【\033[0;32;47m成功\033[0m】<")
                         write_Mods_data += j + ";"
-                        write_WorkshopItems_data += self.modid_and_steamid.get(j) + ";"
+                        if not self.modid_and_steamid.get(j) in writed_WorkshopItems_data:
+                            write_WorkshopItems_data += self.modid_and_steamid.get(j) + ";"
+                            writed_WorkshopItems_data.append(self.modid_and_steamid.get(j))
                     # print(ini_data[ini_data.index(i)])
                     # print(write_Mods_data)
                     # print(write_WorkshopItems_data)
@@ -180,7 +330,7 @@ class PlayerSaveConversionServiceSave:
         while True:
             self.read_ini()
             cmd_list = ["填入临时路径", "查询路径", "生成到服务器", "建立链接", "退出程序"]
-            version = "Ver 0.4"
+            version = "Ver 0.5"
             print(" ")
             print(f"========存档MOD与服务器MOD同步工具{version}==========")
             print("========Write By:CyiceK==========")
@@ -207,11 +357,21 @@ class PlayerSaveConversionServiceSave:
             elif user_input == "5":
                 exit(0)
 
+    def get_info_api(self):
+        # self.read_ini()
+        # self.read_player_mods()
+        # self.get_modid_and_steamid()
+        # self.get_modname_and_steamid()
+        # print(self.modid_and_steamid)
+        # self.get_modfile_info()
+        self.web_get_modfile_info()
+
 
 if __name__ == "__main__":
     pz = PlayerSaveConversionServiceSave()
     try:
         pz.menu()
+        # pz.get_info_api()
     except FileNotFoundError as e:
         print("文件未找到:", e)
         os.system("pause")
