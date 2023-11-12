@@ -5,6 +5,7 @@ import os
 
 # sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='gb18030')
 import shutil
+import traceback
 
 
 class PlayerSaveConversionServiceSave:
@@ -28,7 +29,7 @@ class PlayerSaveConversionServiceSave:
         self.user_save_path = ""
 
     def read_player_mods(self):
-        with open(self.my_document + "/mods/default.txt", "r", encoding="utf-8") as f:
+        with open(self.my_document + "/mods/default.txt", "r") as f:
             r_data = f.readlines()
             # print(r_data)
             read_key = None
@@ -376,5 +377,6 @@ if __name__ == "__main__":
         print("文件未找到:", e)
         os.system("pause")
     except Exception as e:
+        traceback.print_exc()
         print("致命错误:", e)
         os.system("pause")
