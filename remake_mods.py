@@ -2,6 +2,7 @@
 import configparser
 import json
 import os
+import chardet
 
 # sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='gb18030')
 import shutil
@@ -28,8 +29,17 @@ class PlayerSaveConversionServiceSave:
         self.mods_dir = f"{self.workshop_path}{self.steam_id}".replace("//", "//")
         self.user_save_path = ""
 
+    @staticmethod
+    def detect_file_encoding(file_path):
+        with open(file_path, 'rb') as f:
+            raw_data = f.read()
+            result = chardet.detect(raw_data)
+            return result['encoding']
+
     def read_player_mods(self):
-        with open(self.my_document + "/mods/default.txt", "r") as f:
+        with open(f"{self.my_document}/mods/default.txt",
+                  "r",
+                  encoding=self.detect_file_encoding(f"{self.my_document}/mods/default.txt")) as f:
             r_data = f.readlines()
             # print(r_data)
             read_key = None
@@ -62,9 +72,9 @@ class PlayerSaveConversionServiceSave:
     def get_modname_and_steamid(self):
         for i in os.listdir(self.mods_dir):
             # print(i)
-            if os.path.isdir(self.mods_dir + "//" + i):
+            if os.path.isdir(f"{self.mods_dir}//{i}"):
                 # print(os.listdir(self.mods_dir + "//" + i + "//mods"))
-                mods_name = os.listdir(self.mods_dir + "//" + i + "//mods")
+                mods_name = os.listdir(f"{self.mods_dir}//{i}//mods")
                 # print(mods_name, " ", i)
                 for mod_name in mods_name:
                     self.modname_and_steamid[mod_name] = i
@@ -81,8 +91,8 @@ class PlayerSaveConversionServiceSave:
                 mods_name = os.listdir(self.mods_dir + "//" + i + "//mods")
                 for mod_name in mods_name:
                     try:
-                        with open(self.mods_dir + "//" + i + "//mods" + "//" + mod_name + "//mod.info", "r",
-                                  encoding="utf-8") as f:
+                        with open(f"{self.mods_dir}//{i}//mods//{mod_name}//mod.info", "r",
+                                  encoding=self.detect_file_encoding(f"{self.mods_dir}//{i}//mods//{mod_name}//mod.info")) as f:
                             read_list = f.readlines()
                             for j in read_list:
                                 j = j.replace("\n", "")
@@ -104,8 +114,8 @@ class PlayerSaveConversionServiceSave:
                 mods_name = os.listdir(self.mods_dir + "//" + i + "//mods")
                 for mod_name in mods_name:
                     try:
-                        with open(self.mods_dir + "//" + i + "//mods" + "//" + mod_name + "//mod.info", "r",
-                                  encoding="utf-8") as f:
+                        with open(f"{self.mods_dir}//{i}//mods//{mod_name}//mod.info", "r",
+                                  encoding=f"{self.mods_dir}//{i}//mods//{mod_name}//mod.info") as f:
                             read_list = f.readlines()
                             for j in read_list:
                                 j = j.replace("\n", "")
@@ -159,11 +169,11 @@ class PlayerSaveConversionServiceSave:
                     except FileNotFoundError:
                         continue
         # print(self.modfile_info)
-        with open('old_data.json', 'w') as f:
+        with open('old_data.json', 'w', encoding=self.detect_file_encoding('old_data.json')) as f:
             json.dump(self.modfile_info, f, indent=4)
 
     def web_get_modfile_info(self):
-        with open('old_data.json', 'r') as f:
+        with open('old_data.json', 'r', encoding=self.detect_file_encoding('old_data.json')) as f:
             self.modfile_info = json.load(f)
 
         save_list = []
@@ -232,14 +242,14 @@ class PlayerSaveConversionServiceSave:
 
             i += 1
 
-        with open('data.json', 'w') as f:
+        with open('data.json', 'w', encoding=self.detect_file_encoding()) as f:
             json.dump(save_list, f, indent=4)
 
     def rw_service_ini(self):
         self.read_player_mods()
         self.get_modid_and_steamid()
         self.get_modname_and_steamid()
-        with open(self.my_document + "/Server/servertest.ini", "r") as f:
+        with open(self.my_document + "/Server/servertest.ini", "r", encoding=self.detect_file_encoding(self.my_document + "/Server/servertest.ini")) as f:
             self.ini_data = f.readlines()
             for i in self.ini_data:
                 i_list = i.split("=")
@@ -286,10 +296,10 @@ class PlayerSaveConversionServiceSave:
 
     def save_ini(self):
         if self.user_save_path == "":
-            with open(self.my_document + "/Server/servertest.ini", "w+") as f:
+            with open(self.my_document + "/Server/servertest.ini", "w+", encoding="utf-8") as f:
                 f.writelines(self.ini_data)
         else:
-            with open(self.user_save_path + "/servertest.ini", "w+") as f:
+            with open(self.user_save_path + "/servertest.ini", "w+", encoding="utf-8") as f:
                 f.writelines(self.ini_data)
         print(">保存成功！")
 
