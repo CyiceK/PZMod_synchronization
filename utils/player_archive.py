@@ -45,5 +45,5 @@ class PlayerArchive(Tools):
     @staticmethod
     def get_my_documents_path() -> str:
         user_dir = os.path.expanduser('~')
-        documents_dir = os.path.join(user_dir, "Documents").replace("\\", "//")
+        documents_dir = os.path.join(user_dir, "Documents").replace("\\", "//").replace("Documents", "")
         return documents_dir

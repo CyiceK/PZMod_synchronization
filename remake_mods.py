@@ -228,6 +228,7 @@ if __name__ == "__main__":
         pz.menu()
         # pz.get_info_api()
     except FileNotFoundError as e:
+        traceback.print_exc()
         print("文件未找到:", e)
         os.system("pause")
     except Exception as e:
