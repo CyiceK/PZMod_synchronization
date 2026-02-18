@@ -1,60 +1,199 @@
-# Mod synchronization between archive and server
+# PZMod Sync Tool
 
-# 一个把客户端启用的MOD同步到服务器INI的程序
+<p align="center">
+  <strong>Project Zomboid MOD 管理与同步解决方案</strong>
+</p>
+
+<p align="center">
+  <a href="#功能特性">功能特性</a> •
+  <a href="#快速开始">快速开始</a> •
+  <a href="#开发指南">开发指南</a> •
+  <a href="#打包发布">打包发布</a>
+</p>
+
+---
+
+## 📖 简介
+
+PZMod Sync Tool 是一个用于管理 Project Zomboid MOD 并在客户端与服务器之间同步 MOD 配置的工具。采用现代化的 PyQt6 + Fluent Design 界面设计，提供流畅的用户体验。
+
+## ✨ 功能特性
+
+### 🎮 MOD 管理
+- 📋 查看和管理所有已安装的 MOD
+- 🔍 搜索、筛选和排序功能
+- ✅ 批量启用/禁用 MOD
+- 🔗 依赖检查和缺失依赖提示
+- 🖼️ MOD 图标懒加载，优化性能
+
+### 🔄 服务器同步
+- 📤 将客户端 MOD 配置同步到服务器
+- 📥 从服务器下载 MOD 配置
+- 🔐 支持 SFTP/FTP 连接
+
+### 💾 存档管理
+- 📁 查看和管理游戏存档
+- 📦 存档备份和恢复
+- 🗺️ 地图 MOD 管理
+
+### 🌍 国际化
+- 🇨🇳 简体中文
+- 🇺🇸 English
+
+### ⚡ 性能优化
+- 🚀 虚拟滚动，支持大量 MOD 无卡顿
+- 🖼️ 图片懒加载
+- ⏳ 后台任务管理
+
+## 🚀 快速开始
+
+### 环境要求
+
+- Python 3.10+
+- Windows / macOS / Linux
+
+### 安装
+
+```bash
+# 克隆项目
+git clone https://github.com/your-repo/PZMod_synchronization.git
+cd PZMod_synchronization
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 运行
+python main.py
+```
+
+### 配置
+
+首次运行时，请在 **设置** 页面配置以下路径：
+
+- **Workshop 路径**: Steam Workshop 的 MOD 下载目录
+  - Windows: `C:\Program Files (x86)\Steam\steamapps\workshop\content\108600`
+  - macOS: `~/Library/Application Support/Steam/steamapps/workshop/content/108600`
+  - Linux: `~/.steam/steam/steamapps/workshop/content/108600`
+
+- **游戏路径**: Project Zomboid 安装目录
+
+- **存档路径**: 游戏存档目录
+  - Windows: `C:\Users\<用户名>\Zomboid`
+  - macOS: `~/Zomboid`
+  - Linux: `~/Zomboid`
+
+## 📁 项目结构
 
 ```
-Project Zomboid client & Project Zomboid Dedicated Server
+PZMod_synchronization/
+├── main.py              # 应用入口
+├── main_window.py       # 主窗口
+├── config.py            # 配置管理
+├── components/          # UI 组件
+│   ├── mod_card.py      # MOD 卡片组件
+│   ├── virtual_list.py  # 虚拟滚动组件
+│   └── ...
+├── interfaces/          # 页面界面
+│   ├── home_interface.py
+│   ├── mod_interface.py
+│   ├── server_interface.py
+│   └── ...
+├── models/              # 数据模型
+│   └── mod.py
+├── services/            # 业务服务
+│   ├── mod_service.py
+│   ├── server_service.py
+│   ├── i18n.py          # 国际化
+│   ├── image_loader.py  # 图片懒加载
+│   └── task_manager.py  # 后台任务管理
+├── resources/           # 资源文件
+│   ├── icons/
+│   └── i18n/
+├── docs/                # 文档
+├── build.py             # 打包脚本
+├── pzmod-sync.spec      # PyInstaller 配置
+└── requirements.txt     # 依赖列表
 ```
 
-一个十分非常很简单的程序，主要是为了解决我有时跑云端服务器有时开主机服务器，之间mod信息难以同步的烦恼=。=
+## 🛠️ 开发指南
 
-有啥问题issue或者B站/贴吧，说不定会修
+### 技术栈
 
-`Mod管理建议用一个Mod:[Mod Manager]:(https://steamcommunity.com/sharedfiles/filedetails/?id=2694448564)`
+- **UI 框架**: PyQt6
+- **UI 库**: QFluentWidgets (Fluent Design)
+- **Python**: 3.10+
 
-## 环境
+### 架构设计
 
-Python3.6~3.8
+项目采用分层架构：
 
-一个坐以待毙的servertest.ini躺在了存档中
+1. **视图层 (interfaces/)**: 页面 UI 和用户交互
+2. **组件层 (components/)**: 可复用的 UI 组件
+3. **服务层 (services/)**: 业务逻辑处理
+4. **模型层 (models/)**: 数据模型定义
 
-客户端下载好的mod
+### 编码规范
 
-理论上支持Mac/Windows/Linux，但推荐Windows/Mac
+- 遵循 PEP 8 代码风格
+- 使用类型注解
+- 编写清晰的文档字符串
+- 保持 KISS、DRY、SOLID 原则
 
-## 计划
+## 📦 打包发布
 
-- [ ] 正在重构
-- [ ] 更丰富的管理功能，包括服务器/存档/报错追踪/mod管理/地图管理 =V=
-- [ ] 不会做存档参数和地图参数更改（全英文变量名确定不反人类？
+### 使用打包脚本
 
-## 如何使用
+```bash
+# 打包所有平台
+python build.py all
 
-1.git clone本项目
+# 仅打包 Windows
+python build.py windows
 
-2.python remake_mods.py
+# 仅打包 macOS
+python build.py macos
 
-3.PZT配置
-
-```ini
-[pathconfig]
-# F:\Program Files (x86)\Steam\steamapps\common\Project Zomboid Dedicated Server\steamapps\workshop\content\
-workshop_path = 你客户端/服务端放MOD的位置，注意是要下载好所有MOD并且完整的，不然找不到steam_workshop_id。
-#  C:\Users\KLest\
-my_document = 我的文档位置，用于找存档
-# 108600
-steam_id = steam_appid
-user_save_path = 用户自定义输出位置
-# F:\Program Files (x86)\Steam\steamapps\common\Project Zomboid Dedicated Server\steamapps\
-link_A = 分身路径，我从本体拿东西但我本身不占相同空间
-# F:\Program Files (x86)\Steam\steamapps\
-link_B = 本体路径，我提供给分身东西我是母体，我占用主要空间
-# workshop
-link_document = 要同步的文件夹名字，该文件夹会存在A_B各一份
+# 仅打包 Linux
+python build.py linux
 ```
 
+### 手动打包
 
+```bash
+# Windows
+pyinstaller pzmod-sync.spec
 
-## 开源协议
+# 或使用 Nuitka (更好的性能)
+nuitka --standalone --enable-plugin=pyqt6 --windows-icon-from-ico=resources/icons/logo.ico main.py
+```
 
-GPLV3
+## 📄 更新日志
+
+### v1.0.0 (2024-xx-xx)
+
+- 🎉 首个正式版本发布
+- ✨ MOD 管理功能
+- ✨ 服务器同步功能
+- ✨ 存档管理功能
+- ✨ 国际化支持 (中/英)
+- ✨ 性能优化 (虚拟滚动、图片懒加载)
+
+## 📜 开源协议
+
+本项目采用 [GPL-3.0](LICENSE) 协议开源。
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 📬 联系方式
+
+如有问题，请通过以下方式联系：
+
+- GitHub Issues
+- B站
+- 贴吧
+
+---
+
+<p align="center">Made with ❤️ by PZMod Team</p>

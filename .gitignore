@@ -127,3 +127,14 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+/tests/*
+/backups/*
+user_data/mod_index.json
+/docs/*
+
+# Auto Claude data directory
+.auto-claude/
+/_demo/*
+/plans/*
+.serena/
+version_info.txt

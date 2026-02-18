@@ -1,1 +1,12 @@
+# 现有依赖
 chardet
+
+# PyQt6 GUI 框架
+PyQt6>=6.4.0
+
+# QFluentWidgets - Windows 11 Fluent Design 风格组件库
+# 完整版包含亚克力/云母效果
+PyQt6-Fluent-Widgets[full]>=1.0.0
+
+# 打包工具 (开发依赖)
+pyinstaller>=5.0
