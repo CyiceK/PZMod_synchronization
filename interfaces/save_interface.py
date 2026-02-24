@@ -47,6 +47,7 @@ from models.save import SaveType
 from services.i18n import tr
 from services import TextRole, font_renderer
 from services.theme_palette import theme_palette
+from services.log_service import log_service
 from utils.ui_helpers import clamp_button_width
 
 
@@ -238,12 +239,15 @@ class SaveInterface(ScrollArea):
 
     def _load_saves(self):
         """Load save list."""
+        log_service.runtime_debug("[Save] load_saves start", "SaveInterface")
         self._set_refresh_loading(True)
         started = save_service.load_saves_async()
         if not started:
+            log_service.runtime_debug("[Save] load_saves already running", "SaveInterface")
             self._set_refresh_loading(False)
 
     def _on_rebuild_index_clicked(self) -> None:
+        log_service.runtime_debug("[Save] rebuild_index clicked", "SaveInterface")
         msg = MessageBox(
             tr("save.index.rebuild.title"),
             tr("save.index.rebuild.content"),
@@ -270,6 +274,7 @@ class SaveInterface(ScrollArea):
         self._load_saves()
 
     def _on_deep_verify_clicked(self) -> None:
+        log_service.runtime_debug("[Save] deep_verify clicked", "SaveInterface")
         msg = MessageBox(
             tr("save.index.verify.title"),
             tr("save.index.verify.content"),
@@ -291,6 +296,7 @@ class SaveInterface(ScrollArea):
 
     def _on_refresh_clicked(self):
         """Handle refresh button click."""
+        log_service.runtime_debug("[Save] refresh clicked", "SaveInterface")
         self._load_saves()
 
     def _on_open_dir_clicked(self):
@@ -435,6 +441,10 @@ class SaveInterface(ScrollArea):
 
     def _on_search_changed(self, text: str):
         """Handle search text change."""
+        log_service.runtime_debug(
+            f"[Save] search_changed text='{text.strip()}'",
+            "SaveInterface",
+        )
         keyword = text.lower()
         for name, card in self._cards.items():
             if not keyword:
@@ -449,6 +459,10 @@ class SaveInterface(ScrollArea):
         """Handle filter change."""
         filter_types = ["all", "survival", "sandbox", "builder", "multiplayer"]
         if index < len(filter_types):
+            log_service.runtime_debug(
+                f"[Save] filter_changed index={index} type={filter_types[index]}",
+                "SaveInterface",
+            )
             self._filter_saves(filter_types[index])
 
     def _on_backup_save(self, save_name: str):
@@ -750,7 +764,17 @@ class SaveInterface(ScrollArea):
         """Open save map window."""
         save_info = save_service.get_save_by_name(save_name)
         if not save_info:
+            log_service.runtime_debug(
+                f"[Save] open_map_window failed name={save_name!r}",
+                "SaveInterface",
+            )
             return
+        log_service.runtime_debug(
+            f"[Save] open_map_window name={save_info.name} "
+            f"type={getattr(save_info, 'save_type', '')} "
+            f"path={getattr(save_info, 'path', '')}",
+            "SaveInterface",
+        )
         if self._map_window:
             self._map_window.close()
             self._map_window = None  # 清理旧引用，让GC回收

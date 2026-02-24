@@ -20,7 +20,7 @@ class PlayerArchive(Tools):
             for dataline in r_data:
                 # print(i.replace("/n",""))
                 dataline = dataline.replace("\n", "").replace("\t", "")
-                # 识别版本
+                # Detect version
                 if dataline.split("=")[0] == "VERSION ":
                     self.mods_dict["VERSION"] = dataline.split("=")[1].replace(",", "")
 
@@ -31,7 +31,7 @@ class PlayerArchive(Tools):
                     start_sw = False
                     continue
                 if start_sw:
-                    # i.split("=") 这是以 = 分家
+                    # i.split("=") splits on "="
                     self.read_list.append(dataline.split("=")[-1][1:-1])
                     self.mods_dict[read_key] = self.read_list
                 else:

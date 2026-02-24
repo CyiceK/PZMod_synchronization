@@ -6,6 +6,7 @@ Provides mod loading, parsing, and status management.
 @author: Cyicek
 """
 import json
+import logging
 import os
 import re
 import hashlib
@@ -24,6 +25,8 @@ from utils.index_io import read_json_index
 from tools.tools import Tools
 from services.thread_pool import get_index_executor
 from services.log_service import log_service
+
+logger = logging.getLogger(__name__)
 
 
 MOD_INDEX_VERSION = 4  # Bump version for migration support
@@ -642,12 +645,12 @@ class ModService(QObject):
                     updated_index[str(mod_dir)] = cache_entry
                     for mod_info in mod_entries:
                         if mod_info.mod_key in self._mods:
-                            print(f"重复 MOD KEY: {mod_info.mod_key} ({mod_dir})")
+                            logger.warning(f"重复 MOD KEY: {mod_info.mod_key} ({mod_dir})")
                             continue
                         mods.append(mod_info)
                         self._mods[mod_info.mod_key] = mod_info
                 except Exception as e:
-                    print(f"从缓存加载 MOD 失败: {mod_dir}, 错误: {e}")
+                    logger.error(f"从缓存加载 MOD 失败: {mod_dir}, 错误: {e}")
                 progress_count += 1
                 self.loading_progress.emit(progress_count, total)
 
@@ -668,12 +671,12 @@ class ModService(QObject):
                         updated_index[str(mod_dir)] = index_entry
                         for mod_info in mod_entries:
                             if mod_info.mod_key in self._mods:
-                                print(f"重复 MOD KEY: {mod_info.mod_key} ({mod_dir})")
+                                logger.warning(f"重复 MOD KEY: {mod_info.mod_key} ({mod_dir})")
                                 continue
                             mods.append(mod_info)
                             self._mods[mod_info.mod_key] = mod_info
                     except Exception as e:
-                        print(f"解析 MOD 目录失败: {mod_dir}, 错误: {e}")
+                        logger.error(f"解析 MOD 目录失败: {mod_dir}, 错误: {e}")
 
                     progress_count += 1
                     self.loading_progress.emit(progress_count, total)
@@ -685,12 +688,12 @@ class ModService(QObject):
                 mod_entries, _, _ = self._parse_mod_directory_with_meta(mod_dir)
                 for mod_info in mod_entries:
                     if mod_info.mod_key in self._mods:
-                        print(f"重复 MOD KEY: {mod_info.mod_key} ({mod_dir})")
+                        logger.warning(f"重复 MOD KEY: {mod_info.mod_key} ({mod_dir})")
                         continue
                     mods.append(mod_info)
                     self._mods[mod_info.mod_key] = mod_info
             except Exception as e:
-                print(f"解析 MOD 目录失败: {mod_dir}, 错误: {e}")
+                logger.error(f"解析 MOD 目录失败: {mod_dir}, 错误: {e}")
 
             # Emit progress signal.
             self.loading_progress.emit(offset + i + 1, total)
@@ -753,7 +756,7 @@ class ModService(QObject):
             if not content:
                 return None
         except Exception as e:
-            print(f"读取 mod.info 失败: {mod_info_file}, 错误: {e}")
+            logger.error(f"读取 mod.info 失败: {mod_info_file}, 错误: {e}")
             return None
 
         mod_id = self._extract_value(content, "id")

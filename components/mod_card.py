@@ -236,8 +236,8 @@ class ModCard(CardWidget, ThemedMixin):
         self._update_update_label()
         self._update_dependency_label()
 
-        # Set toggle state.
-        self.switch_btn.setChecked(mod.enabled)
+        # Set toggle state - 确保开关状态与mod数据严格一致
+        self._sync_switch_state(bool(mod.enabled))
 
         # Set status badge.
         self._update_status_badge()
@@ -385,6 +385,25 @@ class ModCard(CardWidget, ThemedMixin):
         self.switch_btn.checkedChanged.connect(self._on_switch_changed)
         self.select_checkbox.stateChanged.connect(self._on_checkbox_changed)
         self.version_combo.currentIndexChanged.connect(self._on_version_combo_changed)
+
+    def _sync_switch_state(self, enabled: bool) -> None:
+        """强制同步开关状态，确保滑块与文本一致。"""
+        if not hasattr(self, "switch_btn"):
+            return
+        switch = self.switch_btn
+        switch.blockSignals(True)
+        switch.setChecked(bool(enabled))
+        indicator = getattr(switch, "indicator", None)
+        if indicator is not None and hasattr(indicator, "setChecked"):
+            try:
+                indicator.setChecked(bool(enabled))
+            except Exception:
+                pass
+        switch.blockSignals(False)
+        switch.update()
+        switch.repaint()
+        if hasattr(self, "_mod_info") and self._mod_info:
+            self._mod_info.enabled = bool(enabled)
 
     def update_texts(self):
         """Update UI text."""
@@ -657,6 +676,7 @@ class ModCard(CardWidget, ThemedMixin):
         self._preview_pixmap = None
         self._preview_target = None
         self._setup_data()
+        self._sync_switch_state(bool(self._mod_info.enabled))
         self._apply_preview_style()
 
     def prepare_for_recycle(self):

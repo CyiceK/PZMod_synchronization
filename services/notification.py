@@ -5,8 +5,11 @@ Centralized in-app notification handling.
 
 @author: Cyicek
 """
+import logging
 from enum import Enum
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from PyQt6.QtCore import QObject, pyqtSignal, Qt
 from PyQt6.QtWidgets import QWidget
@@ -17,6 +20,7 @@ from qfluentwidgets import (
     InfoBarIcon
 )
 
+from config import NOTIFICATION_DURATION_DEFAULT
 from services.log_service import log_service
 
 
@@ -32,7 +36,7 @@ class NotificationManager(QObject):
     """Notification manager."""
 
     # Default config
-    DEFAULT_DURATION = 3000  # Default duration (ms)
+    DEFAULT_DURATION = NOTIFICATION_DURATION_DEFAULT
     DEFAULT_POSITION = InfoBarPosition.TOP_RIGHT
 
     def __init__(self):
@@ -122,7 +126,7 @@ class NotificationManager(QObject):
         """Show notification."""
         target_parent = parent or self._default_parent
         if not target_parent:
-            print(f"[{notification_type.value.upper()}] {title}: {content}")
+            logger.info(f"[{notification_type.value.upper()}] {title}: {content}")
             return
 
         # Create InfoBar.

@@ -138,3 +138,9 @@ user_data/mod_index.json
 /plans/*
 .serena/
 version_info.txt
+
+/logs/*
+/user_data/*
+/.idea/*
+/.claude/*
+test*

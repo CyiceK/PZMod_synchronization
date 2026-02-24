@@ -6,6 +6,20 @@ Synchronizes enabled Project Zomboid client mods to the server INI config.
 """
 import os
 import sys
+import multiprocessing
+
+# ── PyCharm Run-mode 兼容 ─────────────────────────────────────────
+# PyCharm 的 Run（非 Debug）模式仍会通过 pydevd 注入 --qt-support=auto，
+# 其 frame-eval 钩子和 Qt 事件循环 monkey-patch 会导致 QStackedWidget /
+# setStyleSheet 等 C++ 操作触发 access violation (0xC0000005).
+# 在 **任何 Qt 导入之前** 禁用这些钩子即可规避。
+_PYCHARM_RUN = os.environ.get("PYCHARM_HOSTED") == "1"
+if _PYCHARM_RUN:
+    os.environ.setdefault("PYDEVD_USE_FRAME_EVAL", "NO")
+    os.environ.setdefault("PYDEVD_USE_CYTHON", "NO")
+    print("[COMPAT] PyCharm Run-mode detected, pydevd hooks disabled", flush=True)
+# ──────────────────────────────────────────────────────────────────
+
 import faulthandler
 import traceback
 import configparser
@@ -28,15 +42,19 @@ del _original_stdout
 
 from config import cfg, Language, apply_document_path_defaults, get_config_status
 from services.i18n import i18n
+from services.log_service import get_logger
+
+# 获取全局logger（新的 AdvancedLogService 会自动初始化）
+logger = get_logger(__name__)
 
 
 def _debug(message: str):
-    print(f"[DEBUG] {message}", file=sys.stderr, flush=True)
+    """调试输出函数（保留用于兼容性）"""
+    logger.debug(message)
 
 
 def _excepthook(exc_type, exc, tb):
-    _debug("Unhandled exception")
-    traceback.print_exception(exc_type, exc, tb)
+    logger.error("Unhandled exception", exc_info=(exc_type, exc, tb))
 
 
 _DIAG_LOG_HANDLE = None
@@ -194,8 +212,13 @@ def main():
     _debug("MainWindow imported")
     window = MainWindow()
     _debug("MainWindow constructed")
-    window.show()
-    _debug("MainWindow shown")
+
+    # 延迟显示窗口 100ms，确保 Qt 内部窗口句柄完全创建
+    # 防止在窗口完全初始化前焦点变化事件导致的空指针解引用
+    from PyQt6.QtCore import QTimer
+    QTimer.singleShot(100, window.show)
+
+    _debug("MainWindow show scheduled")
 
     # Run event loop.
     _debug("Entering event loop")
@@ -203,4 +226,5 @@ def main():
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()

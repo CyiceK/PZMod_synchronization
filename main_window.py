@@ -12,8 +12,8 @@ from qfluentwidgets import (
     SwitchButton,
 )
 from config import cfg
-from PyQt6.QtWidgets import QApplication, QPushButton, QLabel, QToolTip
-from PyQt6.QtGui import QIcon, QColor, QGuiApplication, QPalette
+from PyQt6.QtWidgets import QApplication, QPushButton, QLabel
+from PyQt6.QtGui import QIcon, QColor, QGuiApplication
 from PyQt6.QtCore import QTimer
 
 # Import sub-interfaces.
@@ -33,6 +33,7 @@ from services.log_service import log_service
 from services.thread_pool import shutdown_executors
 from services.i18n import i18n, tr
 from services.mod_service import mod_service
+from services.font_renderer import font_renderer
 
 
 class MainWindow(FluentWindow):
@@ -78,6 +79,16 @@ class MainWindow(FluentWindow):
         qconfig.themeColorChanged.connect(lambda *_: self._apply_theme_accent())
         cfg.theme_color.valueChanged.connect(lambda *_: self._apply_theme_accent())
 
+        # 设置透明背景 (必须在 _init_navigation 之后，所有 interface 已被
+        # addSubInterface 注册到 stacked widget，此时 widget 层次完整可安全操作样式)
+        self._apply_transparent_backgrounds()
+
+        # ── 启动 UI 日志轮询 ──────────────────────────────────────
+        # 必须在所有 addSubInterface 完成后才启动 QTimer,
+        # 否则 QTimer 回调会在 addWidget 的 processEvents 中触发
+        # log_added → LogInterface._on_log_added → insertRow → 💥
+        log_service.start_ui_updates()
+
         # Connect language change signal.
         i18n.language_changed.connect(self._on_language_changed)
 
@@ -86,6 +97,28 @@ class MainWindow(FluentWindow):
 
         # Log startup.
         log_service.info("PZMod Synchronization 已启动", "MainWindow")
+
+    def _apply_transparent_backgrounds(self):
+        """设置所有 interface 的透明背景.
+
+        必须在 _init_navigation() 之后调用 —— interface 必须先通过
+        addSubInterface 注册到 FluentWindow 的 stacked widget，
+        否则在 widget 未完全挂载时调用 setStyleSheet 会导致
+        C++ access violation (0xC0000005).
+        """
+        for iface in [
+            self.home_interface,
+            self.mod_interface,
+            self.server_interface,
+            self.save_interface,
+            self.map_interface,
+            self.link_interface,
+            self.log_interface,
+            self.debug_log_interface,
+            self.setting_interface,
+        ]:
+            if hasattr(iface, "enableTransparentBackground"):
+                iface.enableTransparentBackground()
 
     def _init_services(self):
         """Initialize services."""
@@ -115,19 +148,9 @@ class MainWindow(FluentWindow):
         self.debug_log_interface = DebugLogInterface(self)
         self.setting_interface = SettingInterface(self)
 
-        for interface in [
-            self.home_interface,
-            self.mod_interface,
-            self.server_interface,
-            self.save_interface,
-            self.map_interface,
-            self.link_interface,
-            self.log_interface,
-            self.debug_log_interface,
-            self.setting_interface
-        ]:
-            if hasattr(interface, "enableTransparentBackground"):
-                interface.enableTransparentBackground()
+        # NOTE: enableTransparentBackground() 移至 __init__ 末尾调用
+        # (在 _init_navigation / _init_window 之后)，避免在 addSubInterface
+        # 过程中 stylesheet 修改触发 access violation.
 
     def _init_navigation(self):
         """Initialize sidebar navigation."""
@@ -202,6 +225,11 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM
         )
 
+        # 设置初始页面 - 防止焦点竞争导致的崩溃
+        # QFluentWidgets 要求调用 switchTo() 设置初始页面
+        # 否则在窗口初始化期间点击其他窗口会触发访问冲突 (0xC0000005)
+        self.switchTo(self.home_interface)
+
     def _init_window(self):
         """Initialize window properties."""
         # Window size (adaptive to screen geometry).
@@ -268,15 +296,6 @@ class MainWindow(FluentWindow):
             soft = self._blend_color(QColor("#ffffff"), accent, 0.12).name()
             hover = self._blend_color(QColor("#ffffff"), accent, 0.2).name()
 
-        if qconfig.theme == Theme.DARK:
-            tooltip_bg = "#1f2937"
-            tooltip_text = "#e5e7eb"
-            tooltip_border = "#374151"
-        else:
-            tooltip_bg = "#111827"
-            tooltip_text = "#f8fafc"
-            tooltip_border = "#1f2937"
-
         qss = (
             "QPushButton[accent=\"true\"]:not(#primaryButton){"
             f"border:1px solid {accent_hex};"
@@ -293,20 +312,11 @@ class MainWindow(FluentWindow):
             "QLabel[accented=\"true\"]{"
             f"color:{accent_hex};"
             "}"
-            "QToolTip{"
-            f"color:{tooltip_text};"
-            f"background:{tooltip_bg};"
-            f"border:1px solid {tooltip_border};"
-            "padding:4px 8px;"
-            "border-radius:4px;"
-            "}"
+            + font_renderer.get_tooltip_qss()
         )
         app.setStyleSheet(qss)
 
-        palette = QPalette()
-        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(tooltip_bg))
-        palette.setColor(QPalette.ColorRole.ToolTipText, QColor(tooltip_text))
-        QToolTip.setPalette(palette)
+        font_renderer.apply_tooltip_palette()
 
     def _apply_accent_controls(self, accent: QColor):
         accent_hex = accent.name()

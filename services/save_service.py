@@ -539,7 +539,6 @@ class SaveLoadThread(QThread):
                             save_info = future.result()
                         except Exception as exc:
                             status = "error"
-                            print(f"解析存档目录失败: {item}, 错误: {exc}")
                             log_service.warning(
                                 f"存档索引失败 name={item.name if item else 'unknown'} error={exc}",
                                 "SaveService",
@@ -898,7 +897,7 @@ class SaveService(QObject):
                         saves.append(save_info)
                         self._saves[save_info.name] = save_info
                 except Exception as e:
-                    print(f"解析存档目录失败: {save_dir_item}, 错误: {e}")
+                    log_service.error(f"解析存档目录失败: {save_dir_item}, 错误: {e}")
 
         self._restore_backup_schedules()
         self.saves_loaded.emit(saves)

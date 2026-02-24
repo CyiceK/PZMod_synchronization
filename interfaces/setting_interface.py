@@ -50,6 +50,7 @@ class SettingInterface(ScrollArea):
         self._init_save_settings()
         self._init_mod_settings()
         self._init_cache_settings()
+        self._init_map_render_settings()
         self._init_personalization_settings()
         self._init_about_settings()
 
@@ -261,6 +262,30 @@ class SettingInterface(ScrollArea):
         self.cache_group.addSettingCard(self.cache_delay_card)
 
         self.expand_layout.addWidget(self.cache_group)
+
+    def _init_map_render_settings(self):
+        """Map rendering settings group."""
+        self.map_render_group = SettingCardGroup(tr("settings.map"), self.scroll_widget)
+
+        self.map_high_perf_card = SwitchSettingCard(
+            FluentIcon.SPEED_HIGH,
+            tr("settings.map.high_perf.title"),
+            tr("settings.map.high_perf.desc"),
+            cfg.map_high_perf_render,
+            self.map_render_group
+        )
+
+        self.map_bundled_tiles_card = SwitchSettingCard(
+            FluentIcon.PHOTO,
+            tr("settings.map.bundled_tiles.title"),
+            tr("settings.map.bundled_tiles.desc"),
+            cfg.map_use_bundled_tiles,
+            self.map_render_group
+        )
+
+        self.map_render_group.addSettingCard(self.map_high_perf_card)
+        self.map_render_group.addSettingCard(self.map_bundled_tiles_card)
+        self.expand_layout.addWidget(self.map_render_group)
 
     def _init_personalization_settings(self):
         """Personalization settings group."""

@@ -5,6 +5,7 @@ Handles reading/writing server INI configs and mod syncing.
 
 @author: Cyicek
 """
+import logging
 import re
 import shutil
 from pathlib import Path
@@ -14,6 +15,8 @@ from dataclasses import dataclass
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from config import cfg
+
+logger = logging.getLogger(__name__)
 from tools.tools import Tools
 from services.mod_service import mod_service
 
@@ -93,7 +96,7 @@ class ServerService(QObject):
                     configs.append(config)
                     self._configs[config.name] = config
             except Exception as e:
-                print(f"解析配置文件失败: {ini_file}, 错误: {e}")
+                logger.error(f"解析配置文件失败: {ini_file}, 错误: {e}")
 
         self.configs_loaded.emit(configs)
         return configs
@@ -105,7 +108,7 @@ class ServerService(QObject):
             with open(ini_path, "r", encoding=encoding or "utf-8", errors="ignore") as f:
                 content = f.read()
         except Exception as e:
-            print(f"读取配置文件失败: {ini_path}, 错误: {e}")
+            logger.error(f"读取配置文件失败: {ini_path}, 错误: {e}")
             return None
 
         # Extract Mods field.
