@@ -1,0 +1,77 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-02-22T15:43:45+00:00",
+  "tile_sets": {
+    "b42_vanilla": {
+      "build": "b42",
+      "label": "Build 42 Vanilla",
+      "path": "b42/vanilla",
+      "format": "webp",
+      "scale": 1.0,
+      "tile_size": 256,
+      "tile_count": 4914,
+      "bounds": {
+        "min_x": 0,
+        "max_x": 77,
+        "min_y": 0,
+        "max_y": 62
+      },
+      "maps": [
+        {
+          "name": "Muldraugh, KY",
+          "cell_bounds": [
+            0,
+            77,
+            0,
+            62
+          ],
+          "worldmap": "worldmap.xml",
+          "worldmap_forest": "worldmap-forest.xml"
+        }
+      ],
+      "detected_build": "B42",
+      "thumbs": {
+        "Echo Creek, KY": "thumbs/Echo Creek, KY.webp",
+        "Muldraugh, KY": "thumbs/Muldraugh, KY.webp",
+        "Riverside, KY": "thumbs/Riverside, KY.webp",
+        "Rosewood, KY": "thumbs/Rosewood, KY.webp",
+        "West Point, KY": "thumbs/West Point, KY.webp"
+      }
+    },
+    "b41_vanilla": {
+      "build": "b41",
+      "label": "Build 41 Vanilla",
+      "path": "b41/vanilla",
+      "format": "webp",
+      "scale": 1.0,
+      "tile_size": 256,
+      "tile_count": 2350,
+      "bounds": {
+        "min_x": 0,
+        "max_x": 46,
+        "min_y": 0,
+        "max_y": 49
+      },
+      "maps": [
+        {
+          "name": "Muldraugh, KY",
+          "cell_bounds": [
+            0,
+            65,
+            0,
+            52
+          ],
+          "worldmap": "worldmap.xml",
+          "worldmap_forest": "worldmap-forest.xml"
+        }
+      ],
+      "detected_build": "B41",
+      "thumbs": {
+        "Muldraugh, KY": "thumbs/Muldraugh, KY.webp",
+        "Riverside, KY": "thumbs/Riverside, KY.webp",
+        "Rosewood, KY": "thumbs/Rosewood, KY.webp",
+        "West Point, KY": "thumbs/West Point, KY.webp"
+      }
+    }
+  }
+}

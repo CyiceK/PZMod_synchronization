@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "category": "game_items",
+    "language": "en_US",
+    "version": "1.0.0",
+    "source": "manual",
+    "description": "User overrides for item translations",
+    "last_updated": "2026-02-20",
+    "entry_count": 0
+  },
+  "overrides": {}
+}

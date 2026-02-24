@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "category": "archive_player",
+    "language": "en_US",
+    "version": "1.0.0",
+    "source": "manual",
+    "description": "Player data translation - body parts, skills, traits",
+    "game_version": {
+      "b41": "41.78.16",
+      "b42": "42.0.0"
+    },
+    "last_updated": "2026-02-20",
+    "entry_count": 0
+  },
+  "body_parts": {},
+  "skills": {},
+  "skill_groups": {},
+  "traits": {},
+  "moodles": {},
+  "version_overrides": {},
+  "mod_overrides": {}
+}

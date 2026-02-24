@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "category": "archive_player",
+    "language": "zh_CN",
+    "version": "1.0.0",
+    "source": "manual",
+    "description": "用户自定义玩家数据翻译覆盖",
+    "last_updated": "2026-02-20",
+    "entry_count": 0
+  },
+  "overrides": {
+    "body_parts": {},
+    "skills": {},
+    "traits": {},
+    "moodles": {}
+  }
+}

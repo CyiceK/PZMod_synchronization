@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "category": "archive_player",
+    "language": "en_US",
+    "version": "1.0.0",
+    "source": "manual",
+    "description": "User overrides for player data translations",
+    "last_updated": "2026-02-20",
+    "entry_count": 0
+  },
+  "overrides": {
+    "body_parts": {},
+    "skills": {},
+    "traits": {},
+    "moodles": {}
+  }
+}

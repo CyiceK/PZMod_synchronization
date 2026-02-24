@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "category": "game_items",
+    "language": "en_US",
+    "version": "1.0.0",
+    "source": "extracted",
+    "description": "Game items translation - extracted from game files",
+    "game_version": {
+      "b41": "41.78.16",
+      "b42": "42.0.0"
+    },
+    "last_updated": "2026-02-20",
+    "entry_count": 0
+  },
+  "translations": {},
+  "version_overrides": {},
+  "mod_overrides": {}
+}
