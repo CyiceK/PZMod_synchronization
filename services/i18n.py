@@ -18,6 +18,7 @@ from config import Language
 # Language display names
 LANGUAGE_NAMES = {
     Language.CHINESE_SIMPLIFIED: "简体中文",
+    Language.CHINESE_TRADITIONAL: "繁體中文",
     Language.ENGLISH: "English",
 }
 
@@ -59,6 +60,7 @@ class I18nService(QObject):
         # Map Language enum to JSON file names
         locale_map = {
             Language.CHINESE_SIMPLIFIED: "zh_CN",
+            Language.CHINESE_TRADITIONAL: "zh_TW",
             Language.ENGLISH: "en_US",
         }
 
@@ -97,7 +99,12 @@ class I18nService(QObject):
 
         # Set default language based on system language
         if lang == QLocale.Language.Chinese:
-            self._current_language = Language.CHINESE_SIMPLIFIED
+            # 根据区域判断简体或繁体
+            territory = locale.territory()
+            if territory in [QLocale.Territory.HongKong, QLocale.Territory.Macao, QLocale.Territory.Taiwan]:
+                self._current_language = Language.CHINESE_TRADITIONAL
+            else:
+                self._current_language = Language.CHINESE_SIMPLIFIED
         else:
             self._current_language = Language.ENGLISH
 

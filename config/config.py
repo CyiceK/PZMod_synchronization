@@ -21,6 +21,7 @@ from .validators import OptionalFolderValidator, IntRangeValidator, LanguageSeri
 class Language(Enum):
     """Language enum."""
     CHINESE_SIMPLIFIED = "zh_CN"
+    CHINESE_TRADITIONAL = "zh_TW"
     ENGLISH = "en_US"
 
 
