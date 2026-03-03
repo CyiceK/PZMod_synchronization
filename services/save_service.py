@@ -31,6 +31,15 @@ from services.thread_pool import (
     get_process_executor,
 )
 from services.log_service import log_service
+from services.notification import notification
+from services.i18n import tr
+from services.fs_watch_service import (
+    BaseWatcher,
+    WatchfilesWatcher,
+    UsnJournalWatcher,
+    UsnWatchError,
+)
+from utils.windows_admin import is_windows, is_admin
 from utils.default_mods import (
     read_default_mods,
     resolve_default_mods_path,
@@ -624,6 +633,17 @@ class SaveService(QObject):
         self._save_index_lock = threading.Lock()
         self._index_hits = 0
         self._index_rebuilds = 0
+        self._save_watch_active: bool = False
+        self._save_event_watcher: Optional[BaseWatcher] = None
+        self._save_poll_timer: Optional[QTimer] = None
+        self._save_poll_snapshot: Optional[dict] = None
+        self._save_poll_root: Optional[Path] = None
+        self._save_pending_reload: bool = False
+
+        try:
+            cfg.mod_watch_usn_enabled.valueChanged.connect(self._on_save_usn_changed)
+        except Exception:
+            pass
 
     # ===== Properties =====
     @property
@@ -907,7 +927,8 @@ class SaveService(QObject):
 
     def load_saves_async(self) -> bool:
         """Load saves asynchronously."""
-        if self._load_thread is not None and self._load_thread.isRunning():
+        if self._is_load_thread_running():
+            self._save_pending_reload = True
             return False
         save_dir, error = self._resolve_save_dir()
         if error:
@@ -926,7 +947,7 @@ class SaveService(QObject):
         return True
 
     def deep_verify_saves_async(self) -> bool:
-        if self._load_thread is not None and self._load_thread.isRunning():
+        if self._is_load_thread_running():
             return False
         save_dir, error = self._resolve_save_dir()
         if error:
@@ -955,6 +976,168 @@ class SaveService(QObject):
             self._saves[save_info.name] = save_info
         self._restore_backup_schedules()
         self.saves_loaded.emit(saves)
+        if self._save_pending_reload and self._save_watch_active:
+            self._save_pending_reload = False
+            self.load_saves_async()
+
+    def set_save_watch_active(self, active: bool) -> None:
+        active = bool(active)
+        if active == self._save_watch_active:
+            return
+        self._save_watch_active = active
+        if active:
+            self._start_save_watch()
+        else:
+            self._stop_save_watch()
+
+    def _start_save_watch(self) -> None:
+        save_dir, error = self._resolve_save_dir()
+        if error:
+            self.error_occurred.emit(error)
+            return
+        if save_dir is None:
+            return
+
+        self._stop_save_watch()
+
+        if is_windows() and cfg.get(cfg.mod_watch_usn_enabled):
+            if not is_admin():
+                notification.warning(
+                    tr("common.notice"),
+                    tr("settings.mods.usn.not_admin"),
+                )
+                self._start_save_poll(save_dir)
+                return
+            try:
+                self._save_event_watcher = UsnJournalWatcher([save_dir])
+                self._save_event_watcher.changed.connect(self._on_save_watch_event)
+                self._save_event_watcher.error.connect(self._on_save_watch_error)
+                self._save_event_watcher.start()
+                return
+            except UsnWatchError as exc:
+                self._notify_usn_error(exc)
+                self._start_save_poll(save_dir)
+                return
+            except Exception:
+                notification.warning(
+                    tr("common.notice"),
+                    tr("settings.mods.usn.failed"),
+                )
+                self._start_save_poll(save_dir)
+                return
+
+        if not is_windows():
+            try:
+                self._save_event_watcher = WatchfilesWatcher([save_dir])
+                self._save_event_watcher.changed.connect(self._on_save_watch_event)
+                self._save_event_watcher.error.connect(self._on_save_watch_error)
+                self._save_event_watcher.start()
+                return
+            except Exception:
+                self._start_save_poll(save_dir)
+                return
+
+        self._start_save_poll(save_dir)
+
+    def _stop_save_watch(self) -> None:
+        self._stop_save_event_watcher()
+        self._stop_save_poll()
+        self._save_poll_snapshot = None
+        self._save_poll_root = None
+        self._save_pending_reload = False
+
+    def _on_save_watch_event(self) -> None:
+        if self._is_load_thread_running():
+            self._save_pending_reload = True
+            return
+        self.load_saves_async()
+
+    def _on_save_watch_error(self, message: str) -> None:
+        log_service.warning(f"Save watch error: {message}", "SaveService")
+        if self._save_watch_active:
+            self._stop_save_event_watcher()
+            save_dir, _ = self._resolve_save_dir()
+            if save_dir:
+                self._start_save_poll(save_dir)
+
+    def _start_save_poll(self, save_dir: Path) -> None:
+        self._save_poll_root = save_dir
+        if self._save_poll_timer is None:
+            self._save_poll_timer = QTimer(self)
+            self._save_poll_timer.timeout.connect(self._poll_save_watch)
+        self._save_poll_timer.setInterval(30000)
+        if not self._save_poll_timer.isActive():
+            self._save_poll_timer.start()
+        self._save_poll_snapshot = self._build_save_watch_snapshot(save_dir)
+
+    def _stop_save_poll(self) -> None:
+        if self._save_poll_timer is not None:
+            self._save_poll_timer.stop()
+
+    def _poll_save_watch(self) -> None:
+        if not self._save_watch_active:
+            return
+        if self._is_load_thread_running():
+            return
+        save_dir = self._save_poll_root
+        if save_dir is None or not save_dir.exists():
+            return
+        current_snapshot = self._build_save_watch_snapshot(save_dir)
+        if self._save_poll_snapshot is None:
+            self._save_poll_snapshot = current_snapshot
+            return
+        if self._save_poll_snapshot != current_snapshot:
+            self._save_poll_snapshot = current_snapshot
+            self.load_saves_async()
+
+    def _build_save_watch_snapshot(self, save_dir: Path) -> dict:
+        snapshot: Dict[str, int] = {}
+        try:
+            for mode_dir in save_dir.iterdir():
+                if not mode_dir.is_dir():
+                    continue
+                for save_dir_item in mode_dir.iterdir():
+                    if save_dir_item.is_dir():
+                        try:
+                            snapshot[str(save_dir_item)] = int(save_dir_item.stat().st_mtime_ns)
+                        except OSError:
+                            snapshot[str(save_dir_item)] = 0
+        except OSError:
+            pass
+        return snapshot
+
+    def _is_load_thread_running(self) -> bool:
+        thread = self._load_thread
+        if thread is None:
+            return False
+        try:
+            return bool(thread.isRunning())
+        except RuntimeError:
+            # Qt object may already be deleted by deleteLater.
+            self._load_thread = None
+            return False
+        except Exception:
+            return False
+
+    def _stop_save_event_watcher(self) -> None:
+        if self._save_event_watcher is not None:
+            try:
+                self._save_event_watcher.stop()
+            except Exception:
+                pass
+        self._save_event_watcher = None
+
+    def _notify_usn_error(self, exc: UsnWatchError) -> None:
+        code = getattr(exc, "code", "")
+        if code == "not_ntfs":
+            notification.warning(tr("common.notice"), tr("settings.mods.usn.unsupported"))
+        else:
+            notification.warning(tr("common.notice"), tr("settings.mods.usn.failed"))
+
+    def _on_save_usn_changed(self, _enabled: bool) -> None:
+        if not self._save_watch_active:
+            return
+        self._start_save_watch()
 
     def _detect_save_type(self, mode_name: str) -> SaveType:
         """Detect save type."""

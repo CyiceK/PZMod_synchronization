@@ -18,6 +18,19 @@ from typing import Dict, Optional
 
 from services.cache_service import IndexCache
 
+try:
+    from config import cfg
+except Exception:  # pragma: no cover - fallback for isolated test runs
+    class _Cfg:
+        chunk_adaptive_cache = True
+
+    cfg = _Cfg()
+
+try:
+    import psutil as _psutil
+except Exception:  # pragma: no cover - optional dependency
+    _psutil = None
+
 
 class ChunkObjectCache(IndexCache):
     """
@@ -47,9 +60,17 @@ class ChunkObjectCache(IndexCache):
     def __init__(self):
         """Initialize Chunk cache with user_data directory."""
         base = Path(__file__).resolve().parents[1] / "user_data"
+        max_entries = 50
+        if getattr(cfg, "chunk_adaptive_cache", True) and _psutil is not None:
+            try:
+                available = _psutil.virtual_memory().available
+                dynamic_size = int((available * 0.2) / (100 * 1024))
+                max_entries = min(max(dynamic_size, 100), 2000)
+            except Exception:
+                max_entries = 50
         super().__init__(
             disk_path=base / "chunk_object_cache.json",
-            max_memory_entries=50,  # Cache 50 chunk summaries
+            max_memory_entries=max_entries,  # Cache chunk summaries
         )
 
     def compute_chunk_key(self, chunk_path: Path, save_path: Path) -> Optional[str]:

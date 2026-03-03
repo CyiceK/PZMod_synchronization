@@ -25,6 +25,15 @@ from utils.index_io import read_json_index
 from tools.tools import Tools
 from services.thread_pool import get_index_executor
 from services.log_service import log_service
+from services.notification import notification
+from services.i18n import tr
+from services.fs_watch_service import (
+    BaseWatcher,
+    WatchfilesWatcher,
+    UsnJournalWatcher,
+    UsnWatchError,
+)
+from utils.windows_admin import is_windows, is_admin
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +111,13 @@ class ModService(QObject):
         self._watch_root: Optional[Path] = None
         self._watch_enabled: bool = False
         self._watch_interval_ms = self._resolve_watch_interval_ms()
+        self._event_watcher: Optional[BaseWatcher] = None
+        self._pending_reload: bool = False
+
+        try:
+            cfg.mod_watch_usn_enabled.valueChanged.connect(self._on_mod_usn_changed)
+        except Exception:
+            pass
 
     # ===== Properties =====
     @property
@@ -337,17 +353,57 @@ class ModService(QObject):
         if error:
             self.error_occurred.emit(error)
             return
-        if pz_workshop is None:
+        local_mods, _ = self._resolve_local_mods_root()
+        mods_root = pz_workshop or local_mods
+        if mods_root is None:
             return
-        if self._watch_timer is None:
-            self._watch_timer = QTimer(self)
-            self._watch_timer.timeout.connect(self._poll_mod_watch)
-        self._watch_timer.setInterval(self._watch_interval_ms)
-        if not self._watch_timer.isActive():
-            self._watch_timer.start()
-        self._watch_root = pz_workshop
-        index = self._load_mod_index(pz_workshop)
-        self._watch_snapshot = self._build_watch_snapshot(pz_workshop, index)
+
+        if self._watch_timer is not None:
+            self._watch_timer.stop()
+        self._stop_event_watcher()
+
+        if is_windows() and cfg.get(cfg.mod_watch_usn_enabled):
+            if not is_admin():
+                notification.warning(
+                    tr("common.notice"),
+                    tr("settings.mods.usn.not_admin"),
+                )
+                self._start_mod_poll_watch(mods_root, pz_workshop)
+                return
+            try:
+                self._event_watcher = UsnJournalWatcher([mods_root])
+                self._event_watcher.changed.connect(self._on_mod_watch_event)
+                self._event_watcher.error.connect(self._on_mod_watch_error)
+                self._event_watcher.start()
+                self._watch_root = mods_root
+                self._watch_snapshot = None
+                return
+            except UsnWatchError as exc:
+                self._notify_usn_error(exc)
+                self._start_mod_poll_watch(mods_root, pz_workshop)
+                return
+            except Exception:
+                notification.warning(
+                    tr("common.notice"),
+                    tr("settings.mods.usn.failed"),
+                )
+                self._start_mod_poll_watch(mods_root, pz_workshop)
+                return
+
+        if not is_windows():
+            try:
+                self._event_watcher = WatchfilesWatcher([mods_root])
+                self._event_watcher.changed.connect(self._on_mod_watch_event)
+                self._event_watcher.error.connect(self._on_mod_watch_error)
+                self._event_watcher.start()
+                self._watch_root = mods_root
+                self._watch_snapshot = None
+                return
+            except Exception:
+                self._start_mod_poll_watch(mods_root, pz_workshop)
+                return
+
+        self._start_mod_poll_watch(mods_root, pz_workshop)
 
     def _stop_mod_watch(self) -> None:
         if self._watch_timer is not None:
@@ -355,6 +411,7 @@ class ModService(QObject):
         self._watch_snapshot = None
         self._watch_root = None
         self._watch_enabled = False
+        self._stop_event_watcher()
 
     def _poll_mod_watch(self) -> None:
         if self._load_thread is not None and self._load_thread.isRunning():
@@ -375,6 +432,60 @@ class ModService(QObject):
         if self._has_snapshot_changes(self._watch_snapshot, current_snapshot):
             self._watch_snapshot = current_snapshot
             self.load_mods_async()
+
+    def _start_mod_poll_watch(self, mods_root: Path, workshop_root: Optional[Path]) -> None:
+        if self._watch_timer is None:
+            self._watch_timer = QTimer(self)
+            self._watch_timer.timeout.connect(self._poll_mod_watch)
+        self._watch_timer.setInterval(self._watch_interval_ms)
+        if not self._watch_timer.isActive():
+            self._watch_timer.start()
+        self._watch_root = mods_root
+        index = self._load_mod_index(workshop_root) if workshop_root else {}
+        self._watch_snapshot = self._build_watch_snapshot(mods_root, index)
+
+    def _stop_event_watcher(self) -> None:
+        if self._event_watcher is not None:
+            try:
+                self._event_watcher.stop()
+            except Exception:
+                pass
+        self._event_watcher = None
+
+    def _on_mod_watch_event(self) -> None:
+        if self._load_thread is not None and self._load_thread.isRunning():
+            self._pending_reload = True
+            return
+        self.load_mods_async()
+
+    def _on_mod_watch_error(self, message: str) -> None:
+        log_service.warning(f"Mod watch error: {message}", "ModService")
+        if self._watch_enabled:
+            notification.warning(tr("common.notice"), tr("settings.mods.usn.failed"))
+            self._stop_event_watcher()
+            pz_workshop, _ = self._resolve_workshop_root()
+            local_mods, _ = self._resolve_local_mods_root()
+            mods_root = self._watch_root or pz_workshop or local_mods
+            if mods_root is not None:
+                self._start_mod_poll_watch(mods_root, pz_workshop)
+
+    def _notify_usn_error(self, exc: UsnWatchError) -> None:
+        code = getattr(exc, "code", "")
+        if code == "not_ntfs":
+            notification.warning(tr("common.notice"), tr("settings.mods.usn.unsupported"))
+        else:
+            notification.warning(tr("common.notice"), tr("settings.mods.usn.failed"))
+
+    def _on_mod_usn_changed(self, enabled: bool) -> None:
+        if not self._watch_enabled:
+            return
+        self._stop_mod_watch()
+        if enabled:
+            self._watch_enabled = True
+            self._start_mod_watch()
+        else:
+            self._watch_enabled = True
+            self._start_mod_watch()
 
     def rebuild_index(self, *, reload_mods: bool = True) -> bool:
         path = self._index_path()
@@ -539,6 +650,9 @@ class ModService(QObject):
 
     def _clear_load_thread(self, _mods: Optional[list] = None) -> None:
         self._load_thread = None
+        if self._pending_reload:
+            self._pending_reload = False
+            self.load_mods_async()
 
     def _on_load_thread_error(self, error: str) -> None:
         self._load_thread = None

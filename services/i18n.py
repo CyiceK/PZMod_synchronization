@@ -99,9 +99,9 @@ class I18nService(QObject):
 
         # Set default language based on system language
         if lang == QLocale.Language.Chinese:
-            # 根据区域判断简体或繁体
-            territory = locale.territory()
-            if territory in [QLocale.Territory.HongKong, QLocale.Territory.Macao, QLocale.Territory.Taiwan]:
+            # Check locale name for territory (e.g., "zh_CN", "zh_HK", "zh_TW")
+            locale_name = locale.name()
+            if "_HK" in locale_name or "_TW" in locale_name or "_MO" in locale_name:
                 self._current_language = Language.CHINESE_TRADITIONAL
             else:
                 self._current_language = Language.CHINESE_SIMPLIFIED

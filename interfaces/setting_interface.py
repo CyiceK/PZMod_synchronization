@@ -23,9 +23,10 @@ from qfluentwidgets import (
 )
 
 from components.theme_color_preset_card import ThemeColorPresetCard
-from config import cfg, Language, resolve_zomboid_root, apply_document_path_defaults
+from config import cfg, Language, resolve_zomboid_root, apply_document_path_defaults, safe_save_config
 from services.mod_service import mod_service
 from services.i18n import i18n, tr
+from utils.windows_admin import is_windows, restart_as_admin
 
 
 class SettingInterface(ScrollArea):
@@ -34,6 +35,7 @@ class SettingInterface(ScrollArea):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("setting-interface")
+        self._mod_usn_guard = False
 
         # Create container.
         self.scroll_widget = QWidget()
@@ -192,6 +194,17 @@ class SettingInterface(ScrollArea):
             self.mod_group
         )
 
+        self.mod_usn_card = None
+        if is_windows():
+            usn_icon = getattr(FluentIcon, "SHIELD", FluentIcon.INFO)
+            self.mod_usn_card = SwitchSettingCard(
+                usn_icon,
+                tr("settings.mods.usn.title"),
+                tr("settings.mods.usn.desc"),
+                cfg.mod_watch_usn_enabled,
+                self.mod_group
+            )
+
         watch_interval = int(cfg.get(cfg.mod_watch_interval_sec) or 0)
         self.mod_watch_interval_card = PushSettingCard(
             tr("settings.edit"),
@@ -212,12 +225,17 @@ class SettingInterface(ScrollArea):
         self.rebuild_index_card.clicked.connect(self._rebuild_mod_index)
 
         self.mod_group.addSettingCard(self.mod_watch_card)
+        if self.mod_usn_card is not None:
+            self.mod_group.addSettingCard(self.mod_usn_card)
         self.mod_group.addSettingCard(self.mod_watch_interval_card)
         self.mod_group.addSettingCard(self.rebuild_index_card)
         self.expand_layout.addWidget(self.mod_group)
 
         cfg.mod_watch_enabled.valueChanged.connect(self._on_mod_watch_changed)
         cfg.mod_watch_interval_sec.valueChanged.connect(self._on_mod_watch_interval_changed)
+        if self.mod_usn_card is not None:
+            cfg.mod_watch_usn_enabled.valueChanged.connect(self._on_mod_usn_changed)
+            self._update_mod_watch_interval_state(bool(cfg.get(cfg.mod_watch_usn_enabled)))
 
     def _init_cache_settings(self):
         """Cache prewarm settings group."""
@@ -559,6 +577,68 @@ class SettingInterface(ScrollArea):
         seconds = int(value or 0)
         self.mod_watch_interval_card.setContent(self._format_mod_watch_interval(seconds))
         mod_service.set_mod_watch_interval(seconds)
+
+    def _on_mod_usn_changed(self, enabled: bool) -> None:
+        if self._mod_usn_guard:
+            return
+        if not is_windows():
+            return
+        self._update_mod_watch_interval_state(bool(enabled))
+        if not enabled:
+            InfoBar.info(
+                title=tr("common.notice"),
+                content=tr("settings.mods.usn.disabled"),
+                parent=self,
+                position=InfoBarPosition.TOP_RIGHT,
+                duration=2000,
+            )
+            return
+
+        msg = MessageBox(
+            tr("settings.mods.usn.confirm.title"),
+            tr("settings.mods.usn.confirm.content"),
+            self,
+        )
+        if not msg.exec():
+            self._mod_usn_guard = True
+            cfg.set(cfg.mod_watch_usn_enabled, False)
+            self._mod_usn_guard = False
+            self._update_mod_watch_interval_state(False)
+            InfoBar.info(
+                title=tr("common.notice"),
+                content=tr("settings.mods.usn.denied"),
+                parent=self,
+                position=InfoBarPosition.TOP_RIGHT,
+                duration=2000,
+            )
+            return
+
+        safe_save_config()
+        InfoBar.info(
+            title=tr("common.notice"),
+            content=tr("settings.mods.usn.starting"),
+            parent=self,
+            position=InfoBarPosition.TOP_RIGHT,
+            duration=2000,
+        )
+        ok = restart_as_admin()
+        if not ok:
+            self._mod_usn_guard = True
+            cfg.set(cfg.mod_watch_usn_enabled, False)
+            self._mod_usn_guard = False
+            self._update_mod_watch_interval_state(False)
+            InfoBar.error(
+                title=tr("common.error"),
+                content=tr("settings.mods.usn.failed"),
+                parent=self,
+                position=InfoBarPosition.TOP_RIGHT,
+                duration=3000,
+            )
+
+    def _update_mod_watch_interval_state(self, usn_enabled: bool) -> None:
+        if self.mod_watch_interval_card is None:
+            return
+        self.mod_watch_interval_card.setEnabled(not usn_enabled)
 
     # ===== Cache prewarm =====
     def _select_prewarm_delay(self) -> None:

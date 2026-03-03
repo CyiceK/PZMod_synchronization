@@ -83,6 +83,18 @@ def load_world_dictionary_mapping(save_path: Path) -> Dict[int, str]:
     return {}
 
 
+def prewarm_world_dictionary(save_path: Path) -> None:
+    """
+    Preload world dictionary mapping for process pool workers.
+
+    Best-effort only; failures are swallowed to avoid blocking callers.
+    """
+    try:
+        load_world_dictionary_mapping(save_path)
+    except Exception:
+        return
+
+
 def load_world_dictionary_lua_entry(save_path: Path) -> Dict[str, object]:
     mapping: Dict[int, str] = {}
     source = ""

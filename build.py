@@ -23,7 +23,8 @@ from pathlib import Path
 
 
 # Version info
-VERSION = "1.0.0"
+DEFAULT_VERSION = "1.0.0"
+VERSION = os.getenv("PZMOD_VERSION", DEFAULT_VERSION)
 APP_NAME = "PZMod Sync"
 
 # Paths

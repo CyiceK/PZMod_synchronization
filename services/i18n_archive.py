@@ -360,6 +360,22 @@ class ArchiveTranslationService(TranslationService):
     ) -> Dict[str, str]:
         """批量翻译建筑。"""
         return self.get_batch(building_ids, self.CATEGORY_CONTENT, locale)
+
+    def translate_zones_batch(
+        self,
+        zone_ids: List[str],
+        locale: str = None
+    ) -> Dict[str, str]:
+        """批量翻译区域。"""
+        return self.get_batch(zone_ids, self.CATEGORY_CONTENT, locale)
+
+    def translate_object_types_batch(
+        self,
+        object_type_ids: List[str],
+        locale: str = None
+    ) -> Dict[str, str]:
+        """批量翻译对象类型。"""
+        return self.get_batch(object_type_ids, self.CATEGORY_CONTENT, locale)
     
     # ============ 内部方法 ============
     

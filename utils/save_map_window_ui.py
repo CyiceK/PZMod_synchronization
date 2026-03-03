@@ -91,7 +91,9 @@ from services.chunk_share_service import (
 )
 from services.chunk_content_index import (
     build_chunk_content_index,
+    get_chunk_content_dir_signature,
     load_chunk_content_entry,
+    prepare_chunk_content_resume_entry,
     save_chunk_content_entry,
 )
 from services.i18n import tr
@@ -4843,6 +4845,25 @@ class MapUiMixin:
             )
         # Immediately update visibility (hide/show existing graphics items)
         self._update_layer_visibility()
+        # Hide/show option rows tied to layer toggles
+        if hasattr(self, "_map_offset_row"):
+            self._map_offset_row.setVisible(self._show_map)
+        if hasattr(self, "zombie_coord_row"):
+            self.zombie_coord_row.setVisible(self._show_zombies)
+        if hasattr(self, "animal_coord_row"):
+            self.animal_coord_row.setVisible(self._show_animals)
+        if hasattr(self, "animal_source_row"):
+            self.animal_source_row.setVisible(self._show_animals)
+        if self._show_animals:
+            if hasattr(self, "_update_animal_filter_visibility"):
+                self._update_animal_filter_visibility()
+        else:
+            if hasattr(self, "animal_type_row"):
+                self.animal_type_row.setVisible(False)
+            if hasattr(self, "animal_action_row"):
+                self.animal_action_row.setVisible(False)
+        if hasattr(self, "basement_z_row"):
+            self.basement_z_row.setVisible(self._show_basements)
         if self._show_symbols:
             self._refresh_map_symbols_layer()
         # Debounce render refresh: wait 2 seconds after last toggle to avoid
@@ -9773,15 +9794,23 @@ class MapUiMixin:
 
         self._chunk_content_refresh_btn = PushButton(tr("button.refresh"), dialog)
         self._chunk_content_refresh_btn.clicked.connect(
-            lambda: self._request_chunk_content_index(force=False)
+            lambda: self._request_chunk_content_index(force=False, deep_scan=False)
         )
         search_row.addWidget(self._chunk_content_refresh_btn)
+
+        self._chunk_content_deep_scan_btn = PushButton(
+            tr("save.map.content.index.deep_scan"), dialog
+        )
+        self._chunk_content_deep_scan_btn.clicked.connect(
+            lambda: self._request_chunk_content_index(force=False, deep_scan=True)
+        )
+        search_row.addWidget(self._chunk_content_deep_scan_btn)
 
         self._chunk_content_rebuild_btn = PushButton(
             tr("save.map.content.index.rebuild"), dialog
         )
         self._chunk_content_rebuild_btn.clicked.connect(
-            lambda: self._request_chunk_content_index(force=True)
+            lambda: self._request_chunk_content_index(force=True, deep_scan=True)
         )
         search_row.addWidget(self._chunk_content_rebuild_btn)
         layout.addLayout(search_row)
@@ -9915,7 +9944,7 @@ class MapUiMixin:
             lambda _text: self._apply_chunk_content_filter()
         )
         dialog.finished.connect(lambda _code: self._clear_chunk_content_dialog())
-        self._request_chunk_content_index(force=False)
+        self._request_chunk_content_index(force=False, deep_scan=False)
         self._apply_chunk_content_filter()
         dialog.show()
 
@@ -9924,6 +9953,7 @@ class MapUiMixin:
         self._chunk_content_search_edit = None
         self._chunk_content_scope_combo = None
         self._chunk_content_refresh_btn = None
+        self._chunk_content_deep_scan_btn = None
         self._chunk_content_rebuild_btn = None
         self._chunk_content_type_combo = None
         self._chunk_content_sort_combo = None
@@ -9948,14 +9978,58 @@ class MapUiMixin:
             except Exception:
                 pass
             self._chunk_content_future = None
+        self._chunk_content_progressive_pending = []
+        self._chunk_content_progressive_files = 0
+        self._chunk_content_progressive_last_update = 0.0
 
-    def _request_chunk_content_index(self, *, force: bool) -> None:
+    def _queue_chunk_content_progressive_entries(
+        self, entries: List[Dict[str, object]]
+    ) -> None:
+        lock = getattr(self, "_chunk_content_progressive_lock", None)
+        if lock is None:
+            return
+        with lock:
+            self._chunk_content_progressive_files += 1
+            if entries:
+                self._chunk_content_progressive_pending.extend(entries)
+
+    def _apply_chunk_content_progressive_updates(self, *, force: bool = False) -> None:
+        if self._chunk_content_dialog is None:
+            return
+        lock = getattr(self, "_chunk_content_progressive_lock", None)
+        if lock is None:
+            return
+        now = time.monotonic()
+        entries: List[Dict[str, object]] = []
+        with lock:
+            pending_files = int(getattr(self, "_chunk_content_progressive_files", 0))
+            last_update = float(getattr(self, "_chunk_content_progressive_last_update", 0.0))
+            if not force:
+                if pending_files < 20 and now - last_update < 0.3:
+                    return
+            if pending_files == 0 and not force:
+                return
+            entries = list(self._chunk_content_progressive_pending)
+            self._chunk_content_progressive_pending.clear()
+            self._chunk_content_progressive_files = 0
+            self._chunk_content_progressive_last_update = now
+        if entries:
+            self._chunk_content_entries.extend(entries)
+            self._chunk_content_limits_changed = False
+            self._apply_chunk_content_filter()
+
+    def _request_chunk_content_index(self, *, force: bool, deep_scan: bool) -> None:
         if self._chunk_content_dialog is None:
             return
         if self._chunk_content_future is not None:
             if not getattr(self._chunk_content_future, "done", lambda: False)():
                 return
-        if force:
+        force_map_flag = bool(getattr(self, "_chunk_content_force_map", False))
+        force_chunkdata_flag = bool(getattr(self, "_chunk_content_force_chunkdata", False))
+        # Default to normal fallback policy. We only disable chunkdata->map fallback
+        # when this request is truly cache-driven fast mode.
+        self._chunk_content_allow_map_fallback = True
+        if force and not (force_map_flag or force_chunkdata_flag):
             self._chunk_content_fallback_used = False
         save_path = self.save_info.path
         if not save_path.exists():
@@ -9970,64 +10044,240 @@ class MapUiMixin:
         existing = None if force else load_chunk_content_entry(save_path)
         desired_total = int(self._chunk_content_max_total)
         desired_per = int(self._chunk_content_max_per_chunk)
-        index = self._scan_chunk_file_index(save_path)
-        map_index = index.get("map", {})
-        chunkdata_index = index.get("chunkdata", {})
-        target_index: Dict[Tuple[int, int], Path] = {}
-        source = "chunkdata"
-        force_map = bool(getattr(self, "_chunk_content_force_map", False))
-        build = detect_build_version(save_path)
-        if force_map:
-            self._chunk_content_force_map = False
-            target_index = map_index
-            source = "map"
-        elif build == "B41" and map_index:
-            target_index = map_index
-            source = "map"
-        elif chunkdata_index:
-            target_index = chunkdata_index
-            source = "chunkdata"
-        elif map_index:
-            target_index = map_index
-            source = "map"
-        log_service.runtime_debug(
-            f"[ChunkContent] request build={build} source={source} "
-            f"map={len(map_index)} chunkdata={len(chunkdata_index)} force={force}",
-            "ChunkContent",
-        )
-        self._chunk_content_last_source = source
-        self._chunk_content_has_map_index = bool(map_index)
-        if not target_index:
-            InfoBar.warning(
-                title=tr("common.notice"),
-                content=tr("save.map.content.index.no_chunkdata"),
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=2800,
-            )
-            self._chunk_content_entries = []
-            self._chunk_content_filtered = []
-            self._chunk_content_partial = False
-            self._chunk_content_limits_changed = False
-            self._chunk_content_page = 0
-            self._apply_chunk_content_filter()
-            return
+
         if existing and not force:
-            existing_source = existing.get("source", "chunkdata") if isinstance(existing, dict) else "chunkdata"
             limits = existing.get("limits") if isinstance(existing, dict) else None
             if (
-                existing_source != source
-                or not isinstance(limits, dict)
+                not isinstance(limits, dict)
                 or limits.get("max_total") != desired_total
                 or limits.get("max_per_chunk") != desired_per
             ):
                 existing = None
+
+        target_index: Dict[Tuple[int, int], Path] = {}
+        source = "chunkdata"
+        resume_entry = None
+        fast_resume_hit = False
+        cache_quick_mode = False
+
+        def _has_chunkdata_files_quick(path: Path) -> bool:
+            chunk_dir = path / "chunkdata"
+            if not chunk_dir.exists():
+                return False
+            try:
+                with os.scandir(chunk_dir) as it:
+                    for item in it:
+                        if not item.is_file():
+                            continue
+                        name = item.name
+                        if name.startswith("chunkdata_") and name.endswith(".bin"):
+                            return True
+            except Exception:
+                return False
+            return False
+
+        if existing and not force:
+            existing_source = existing.get("source", "chunkdata") if isinstance(existing, dict) else "chunkdata"
+            pending_chunks = existing.get("pending_chunks") if isinstance(existing, dict) else None
+            existing_total_entries = 0
+            existing_partial_reason = ""
+            if isinstance(existing, dict):
+                try:
+                    existing_total_entries = int(existing.get("total_entries", 0) or 0)
+                except Exception:
+                    existing_total_entries = 0
+                existing_partial_reason = str(existing.get("partial_reason") or "")
+            cache_hit = (
+                isinstance(existing_source, str)
+                and existing_source in ("map", "chunkdata")
+                and existing.get("dir_sig")
+                == get_chunk_content_dir_signature(save_path, existing_source)
+                and existing_total_entries > 0
+                and existing_partial_reason != "error"
+            )
+            if cache_hit:
+                cache_quick_mode = True
+                self._chunk_content_last_source = existing_source
+                self._chunk_content_has_map_index = bool(existing_source == "map")
+                self._chunk_content_has_chunkdata_index = _has_chunkdata_files_quick(save_path)
+                self._apply_chunk_content_entry(existing, save_entry=False)
+                # Cache-first fast path:
+                # if we can trust cached index, return immediately and avoid bin parsing.
+                if not deep_scan:
+                    log_service.runtime_debug(
+                        f"[ChunkContent] cache quick hit source={existing_source} "
+                        f"total={existing_total_entries} pending="
+                        f"{len(pending_chunks) if isinstance(pending_chunks, list) else 0}",
+                        "ChunkContent",
+                    )
+                    return
+            if (
+                cache_hit
+                and isinstance(pending_chunks, list)
+                and pending_chunks
+            ):
+                fast_target: Dict[Tuple[int, int], Path] = {}
+                fast_ok = True
+                for chunk in pending_chunks:
+                    if not isinstance(chunk, dict):
+                        fast_ok = False
+                        break
+                    path_value = chunk.get("path")
+                    if not isinstance(path_value, str) or not path_value:
+                        fast_ok = False
+                        break
+                    raw_x = chunk.get("chunk_x")
+                    raw_y = chunk.get("chunk_y")
+                    try:
+                        if isinstance(raw_x, bool) or isinstance(raw_y, bool):
+                            raise ValueError
+                        chunk_x = int(raw_x)
+                        chunk_y = int(raw_y)
+                    except Exception:
+                        fast_ok = False
+                        break
+                    sig = chunk.get("sig")
+                    if sig is not None:
+                        if not isinstance(sig, dict):
+                            fast_ok = False
+                            break
+                        try:
+                            int(sig.get("mtime_ns", 0))
+                            int(sig.get("size", 0))
+                        except Exception:
+                            fast_ok = False
+                            break
+                    chunk_path = Path(path_value)
+                    if not chunk_path.is_absolute() or not chunk_path.exists():
+                        fast_ok = False
+                        break
+                    fast_target[(chunk_x, chunk_y)] = chunk_path
+                if fast_ok and fast_target:
+                    target_index = fast_target
+                    source = existing_source
+                    resume_entry = existing
+                    fast_resume_hit = True
+
+        if fast_resume_hit:
+            cache_quick_mode = True
+            self._chunk_content_last_source = source
+            self._chunk_content_has_map_index = bool(source == "map")
+            self._chunk_content_has_chunkdata_index = _has_chunkdata_files_quick(save_path)
+            self._apply_chunk_content_entry(existing, save_entry=False)
+            log_service.runtime_debug(
+                f"[ChunkContent] fast resume source={source} pending={len(target_index)}",
+                "ChunkContent",
+            )
+        else:
+            index = self._scan_chunk_file_index(save_path)
+            map_index = index.get("map", {})
+            chunkdata_index = index.get("chunkdata", {})
+            force_map = bool(getattr(self, "_chunk_content_force_map", False))
+            force_chunkdata = bool(getattr(self, "_chunk_content_force_chunkdata", False))
+            build = detect_build_version(save_path)
+            if force_map:
+                self._chunk_content_force_map = False
+                target_index = map_index
+                source = "map"
+            elif force_chunkdata:
+                self._chunk_content_force_chunkdata = False
+                target_index = chunkdata_index
+                source = "chunkdata"
+            elif force and map_index:
+                # Force rebuild should prioritize full map scan to avoid
+                # quickly settling on sparse chunkdata-only results.
+                target_index = map_index
+                source = "map"
+            elif build == "B41" and map_index:
+                target_index = map_index
+                source = "map"
+            elif deep_scan and map_index:
+                target_index = map_index
+                source = "map"
+            elif chunkdata_index:
+                target_index = chunkdata_index
+                source = "chunkdata"
+            elif map_index:
+                target_index = map_index
+                source = "map"
+            log_service.runtime_debug(
+                f"[ChunkContent] request build={build} source={source} "
+                f"map={len(map_index)} chunkdata={len(chunkdata_index)} "
+                f"force={force} deep_scan={deep_scan}",
+                "ChunkContent",
+            )
+            self._chunk_content_last_source = source
+            self._chunk_content_has_map_index = bool(map_index)
+            self._chunk_content_has_chunkdata_index = bool(chunkdata_index)
+            if not target_index:
+                InfoBar.warning(
+                    title=tr("common.notice"),
+                    content=tr("save.map.content.index.no_chunkdata"),
+                    parent=self,
+                    position=InfoBarPosition.TOP,
+                    duration=2800,
+                )
+                self._chunk_content_entries = []
+                self._chunk_content_filtered = []
+                self._chunk_content_partial = False
+                self._chunk_content_limits_changed = False
+                self._chunk_content_page = 0
+                self._apply_chunk_content_filter()
+                return
+            if existing and not force:
+                existing_source = existing.get("source", "chunkdata") if isinstance(existing, dict) else "chunkdata"
+                limits = existing.get("limits") if isinstance(existing, dict) else None
+                if (
+                    existing_source != source
+                    or not isinstance(limits, dict)
+                    or limits.get("max_total") != desired_total
+                    or limits.get("max_per_chunk") != desired_per
+                ):
+                    existing = None
+            pending_files: List[str] = []
+            if existing and not force:
+                resume_entry = prepare_chunk_content_resume_entry(
+                    save_path,
+                    target_index,
+                    existing,
+                    source=source,
+                    max_entries_total=desired_total,
+                    max_entries_per_chunk=desired_per,
+                )
+                if isinstance(resume_entry, dict):
+                    pending_files = resume_entry.get("pending_files", [])
+                    if not isinstance(pending_files, list):
+                        pending_files = []
+                    self._apply_chunk_content_entry(resume_entry, save_entry=False)
+                if pending_files:
+                    try:
+                        save_chunk_content_entry(save_path, resume_entry)
+                    except Exception:
+                        pass
+                if not pending_files and not deep_scan:
+                    return
+            else:
+                self._chunk_content_entries = []
+                self._chunk_content_filtered = []
+                self._chunk_content_partial = False
+                self._chunk_content_limits_changed = False
+                self._chunk_content_page = 0
+                self._apply_chunk_content_filter()
+        # Cache fast mode should avoid source hopping. Non-cache quick requests should
+        # keep normal fallback behavior so we don't get stuck at empty chunkdata results.
+        self._chunk_content_allow_map_fallback = bool(force or deep_scan or not cache_quick_mode)
         with self._chunk_content_progress_lock:
             self._chunk_content_progress = {
                 "done": 0,
                 "total": len(target_index),
                 "phase": "",
             }
+        lock = getattr(self, "_chunk_content_progressive_lock", None)
+        if lock is not None:
+            with lock:
+                self._chunk_content_progressive_pending = []
+                self._chunk_content_progressive_files = 0
+                self._chunk_content_progressive_last_update = time.monotonic()
 
         def progress_cb(done: int, total: int, phase: str) -> None:
             with self._chunk_content_progress_lock:
@@ -10035,18 +10285,27 @@ class MapUiMixin:
                 self._chunk_content_progress["total"] = total
                 self._chunk_content_progress["phase"] = phase
 
+        def progressive_cb(entries: List[Dict[str, object]], _path_key: str) -> None:
+            self._queue_chunk_content_progressive_entries(entries)
+
         use_process_pool = len(target_index) >= 64
+        fast_dir_check = not deep_scan and not force
         self._chunk_content_cancel_event = threading.Event()
         self._chunk_content_future = get_index_executor().submit(
             build_chunk_content_index,
             save_path,
             target_index,
             existing=existing,
+            resume_entry=resume_entry,
+            progressive=True,
+            progressive_cb=progressive_cb,
             max_entries_total=desired_total,
             max_entries_per_chunk=desired_per,
             progress_cb=progress_cb,
             source=source,
             use_process_pool=use_process_pool,
+            fast_dir_check=fast_dir_check,
+            resume_subset=bool(fast_resume_hit),
             cancel_event=self._chunk_content_cancel_event,
         )
         self._update_chunk_content_status(running=True)
@@ -10062,10 +10321,12 @@ class MapUiMixin:
             self._chunk_content_future = None
             return
         if not future.done():
+            self._apply_chunk_content_progressive_updates()
             self._update_chunk_content_status(running=True)
             return
         self._chunk_content_timer.stop()
         self._chunk_content_future = None
+        self._apply_chunk_content_progressive_updates(force=True)
         try:
             entry = future.result()
         except Exception:
@@ -10094,18 +10355,67 @@ class MapUiMixin:
                 for items in file_entries.values():
                     if isinstance(items, list):
                         entry_count += len(items)
-        entry_partial = bool(entry.get("partial")) if isinstance(entry, dict) else False
+        partial_reason = ""
+        if isinstance(entry, dict):
+            partial_reason = str(entry.get("partial_reason") or "")
+        log_service.runtime_debug(
+            "[ChunkContent] build result "
+            f"source={getattr(self, '_chunk_content_last_source', '?')} "
+            f"entry_count={entry_count} partial_reason={partial_reason or '-'}",
+            "ChunkContent",
+        )
+        should_fallback = False
+        if entry_count == 0 and partial_reason == "error":
+            should_fallback = True
+        elif entry_count == 0 and partial_reason not in ("resume", "limit"):
+            should_fallback = True
         if (
-            (entry_count == 0 or entry_partial)
+            should_fallback
             and self._chunk_content_last_source == "chunkdata"
             and self._chunk_content_has_map_index
             and not self._chunk_content_fallback_used
         ):
+            if not bool(getattr(self, "_chunk_content_allow_map_fallback", False)):
+                log_service.runtime_debug(
+                    "[ChunkContent] skip chunkdata->map fallback in quick mode",
+                    "ChunkContent",
+                )
+            else:
+                self._chunk_content_fallback_used = True
+                self._chunk_content_force_map = True
+                self._request_chunk_content_index(force=True, deep_scan=True)
+                return
+        if (
+            should_fallback
+            and self._chunk_content_last_source == "map"
+            and bool(getattr(self, "_chunk_content_has_chunkdata_index", False))
+            and not self._chunk_content_fallback_used
+        ):
             self._chunk_content_fallback_used = True
-            self._chunk_content_force_map = True
-            self._request_chunk_content_index(force=True)
+            self._chunk_content_force_chunkdata = True
+            self._request_chunk_content_index(force=True, deep_scan=True)
             return
-        save_chunk_content_entry(self.save_info.path, entry)
+        current_count = len(getattr(self, "_chunk_content_entries", []) or [])
+        if entry_count == 0 and partial_reason == "error" and current_count > 0:
+            log_service.runtime_debug(
+                "[ChunkContent] preserve existing non-empty list; "
+                f"drop empty error result current={current_count}",
+                "ChunkContent",
+            )
+            self._update_chunk_content_status(running=False)
+            InfoBar.warning(
+                title=tr("common.notice"),
+                content=tr("save.map.content.index.failed"),
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=2800,
+            )
+            return
+        self._apply_chunk_content_entry(entry, save_entry=True)
+
+    def _apply_chunk_content_entry(self, entry: Dict[str, object], *, save_entry: bool) -> None:
+        if save_entry:
+            save_chunk_content_entry(self.save_info.path, entry)
         entries: List[Dict[str, object]] = []
         if isinstance(entry, dict):
             file_entries = entry.get("entries", {})

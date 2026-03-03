@@ -221,6 +221,7 @@ class SaveInterface(ScrollArea):
     def showEvent(self, event):
         """When page is shown."""
         super().showEvent(event)
+        save_service.set_save_watch_active(True)
         self.update_texts()
         if not self._signals_connected:
             save_service.saves_loaded.connect(self._on_saves_loaded)
@@ -236,6 +237,11 @@ class SaveInterface(ScrollArea):
         # Auto-load if there are no saves.
         if not self._cards:
             QTimer.singleShot(100, self._load_saves)
+
+    def hideEvent(self, event):
+        """When page is hidden."""
+        super().hideEvent(event)
+        save_service.set_save_watch_active(False)
 
     def _load_saves(self):
         """Load save list."""

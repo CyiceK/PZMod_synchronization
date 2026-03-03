@@ -432,6 +432,10 @@ class SaveMapWindow(
         self._chunk_content_has_map_index = False
         self._chunk_content_progress = {"done": 0, "total": 0, "phase": ""}
         self._chunk_content_progress_lock = threading.Lock()
+        self._chunk_content_progressive_pending: List[Dict[str, object]] = []
+        self._chunk_content_progressive_files = 0
+        self._chunk_content_progressive_last_update = 0.0
+        self._chunk_content_progressive_lock = threading.Lock()
         self._chunk_content_timer = QTimer(self)
         self._chunk_content_timer.setSingleShot(False)
         self._chunk_content_timer.timeout.connect(self._tick_chunk_content_index)
@@ -683,6 +687,11 @@ class SaveMapWindow(
         self.resize(980, 760)
         # 关闭窗口时自动销毁，释放内存
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+
+        # Early build detection so _load_map_layer_transform() inside _init_ui()
+        # reads the correct B41/B42 key instead of always falling back to class
+        # default _tile_per_chunk=10 (B41).
+        self._configure_cell_scale()
 
         self._load_zone_settings()
         self._init_ui()
@@ -974,15 +983,15 @@ class SaveMapWindow(
         self._map_debug_offset_x = _saved[0]
         self._map_debug_offset_y = _saved[1]
         self._map_debug_scale = _saved[2]
-        offset_row = QFrame(layer_body)
-        offset_row.setObjectName("layer-row")
-        offset_hl = QHBoxLayout(offset_row)
+        self._map_offset_row = QFrame(layer_body)
+        self._map_offset_row.setObjectName("layer-row")
+        offset_hl = QHBoxLayout(self._map_offset_row)
         offset_hl.setContentsMargins(24, 0, 6, 2)
         offset_hl.setSpacing(4)
         _no_btn = QDoubleSpinBox.ButtonSymbols.NoButtons
-        self._map_offset_label = QLabel("Offset", offset_row)
+        self._map_offset_label = QLabel("Offset", self._map_offset_row)
         offset_hl.addWidget(self._map_offset_label)
-        self._map_offset_x_spin = QDoubleSpinBox(offset_row)
+        self._map_offset_x_spin = QDoubleSpinBox(self._map_offset_row)
         self._map_offset_x_spin.setPrefix("X ")
         self._map_offset_x_spin.setRange(-1000.0, 1000.0)
         self._map_offset_x_spin.setSingleStep(1.0)
@@ -991,7 +1000,7 @@ class SaveMapWindow(
         self._map_offset_x_spin.setButtonSymbols(_no_btn)
         self._map_offset_x_spin.setFixedWidth(70)
         offset_hl.addWidget(self._map_offset_x_spin)
-        self._map_offset_y_spin = QDoubleSpinBox(offset_row)
+        self._map_offset_y_spin = QDoubleSpinBox(self._map_offset_row)
         self._map_offset_y_spin.setPrefix("Y ")
         self._map_offset_y_spin.setRange(-1000.0, 1000.0)
         self._map_offset_y_spin.setSingleStep(1.0)
@@ -1000,9 +1009,9 @@ class SaveMapWindow(
         self._map_offset_y_spin.setButtonSymbols(_no_btn)
         self._map_offset_y_spin.setFixedWidth(70)
         offset_hl.addWidget(self._map_offset_y_spin)
-        self._map_scale_label = QLabel("Scale", offset_row)
+        self._map_scale_label = QLabel("Scale", self._map_offset_row)
         offset_hl.addWidget(self._map_scale_label)
-        self._map_scale_spin = QDoubleSpinBox(offset_row)
+        self._map_scale_spin = QDoubleSpinBox(self._map_offset_row)
         self._map_scale_spin.setRange(0.1, 10.0)
         self._map_scale_spin.setSingleStep(0.05)
         self._map_scale_spin.setDecimals(2)
@@ -1011,7 +1020,7 @@ class SaveMapWindow(
         self._map_scale_spin.setFixedWidth(60)
         offset_hl.addWidget(self._map_scale_spin)
         offset_hl.addStretch()
-        layer_layout.addWidget(offset_row)
+        layer_layout.addWidget(self._map_offset_row)
         self._map_offset_x_spin.valueChanged.connect(self._on_map_debug_offset_changed)
         self._map_offset_y_spin.valueChanged.connect(self._on_map_debug_offset_changed)
         self._map_scale_spin.valueChanged.connect(self._on_map_debug_scale_changed)
@@ -2294,6 +2303,22 @@ class SaveMapWindow(
         self._populate_mod_maps_panel()
         self._set_map_placeholder_visible(False)
         self.map_body.setVisible(True)
+        # Initialize layer option rows visibility
+        if hasattr(self, "_map_offset_row"):
+            self._map_offset_row.setVisible(self._show_map)
+        if hasattr(self, "zombie_coord_row"):
+            self.zombie_coord_row.setVisible(self._show_zombies)
+        if hasattr(self, "animal_coord_row"):
+            self.animal_coord_row.setVisible(self._show_animals)
+        if hasattr(self, "animal_source_row"):
+            self.animal_source_row.setVisible(self._show_animals)
+        if not self._show_animals:
+            if hasattr(self, "animal_type_row"):
+                self.animal_type_row.setVisible(False)
+            if hasattr(self, "animal_action_row"):
+                self.animal_action_row.setVisible(False)
+        if hasattr(self, "basement_z_row"):
+            self.basement_z_row.setVisible(self._show_basements)
         self._warn_map_tile_mismatch()
         _render_debug_log(
             "flow_render_scene_begin",

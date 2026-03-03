@@ -92,6 +92,7 @@ from services.chunk_share_service import (
 from services.chunk_content_index import (
     build_chunk_content_index,
     load_chunk_content_entry,
+    prepare_chunk_content_resume_entry,
     save_chunk_content_entry,
 )
 from services.i18n import tr
@@ -4838,6 +4839,8 @@ class MapUiMixin:
         # Immediately update visibility (hide/show existing graphics items)
         self._update_layer_visibility()
         # Hide/show sub-controls for layers with options
+        if hasattr(self, "_map_offset_row"):
+            self._map_offset_row.setVisible(self._show_map)
         if hasattr(self, "zombie_coord_row"):
             self.zombie_coord_row.setVisible(self._show_zombies)
         if hasattr(self, "animal_coord_row"):
@@ -9773,15 +9776,23 @@ class MapUiMixin:
 
         self._chunk_content_refresh_btn = PushButton(tr("button.refresh"), dialog)
         self._chunk_content_refresh_btn.clicked.connect(
-            lambda: self._request_chunk_content_index(force=False)
+            lambda: self._request_chunk_content_index(force=False, deep_scan=False)
         )
         search_row.addWidget(self._chunk_content_refresh_btn)
+
+        self._chunk_content_deep_scan_btn = PushButton(
+            tr("save.map.content.index.deep_scan"), dialog
+        )
+        self._chunk_content_deep_scan_btn.clicked.connect(
+            lambda: self._request_chunk_content_index(force=False, deep_scan=True)
+        )
+        search_row.addWidget(self._chunk_content_deep_scan_btn)
 
         self._chunk_content_rebuild_btn = PushButton(
             tr("save.map.content.index.rebuild"), dialog
         )
         self._chunk_content_rebuild_btn.clicked.connect(
-            lambda: self._request_chunk_content_index(force=True)
+            lambda: self._request_chunk_content_index(force=True, deep_scan=True)
         )
         search_row.addWidget(self._chunk_content_rebuild_btn)
         layout.addLayout(search_row)
@@ -9915,7 +9926,7 @@ class MapUiMixin:
             lambda _text: self._apply_chunk_content_filter()
         )
         dialog.finished.connect(lambda _code: self._clear_chunk_content_dialog())
-        self._request_chunk_content_index(force=False)
+        self._request_chunk_content_index(force=False, deep_scan=False)
         self._apply_chunk_content_filter()
         dialog.show()
 
@@ -9924,6 +9935,7 @@ class MapUiMixin:
         self._chunk_content_search_edit = None
         self._chunk_content_scope_combo = None
         self._chunk_content_refresh_btn = None
+        self._chunk_content_deep_scan_btn = None
         self._chunk_content_rebuild_btn = None
         self._chunk_content_type_combo = None
         self._chunk_content_sort_combo = None
@@ -9948,8 +9960,47 @@ class MapUiMixin:
             except Exception:
                 pass
             self._chunk_content_future = None
+        self._chunk_content_progressive_pending = []
+        self._chunk_content_progressive_files = 0
+        self._chunk_content_progressive_last_update = 0.0
 
-    def _request_chunk_content_index(self, *, force: bool) -> None:
+    def _queue_chunk_content_progressive_entries(
+        self, entries: List[Dict[str, object]]
+    ) -> None:
+        lock = getattr(self, "_chunk_content_progressive_lock", None)
+        if lock is None:
+            return
+        with lock:
+            self._chunk_content_progressive_files += 1
+            if entries:
+                self._chunk_content_progressive_pending.extend(entries)
+
+    def _apply_chunk_content_progressive_updates(self, *, force: bool = False) -> None:
+        if self._chunk_content_dialog is None:
+            return
+        lock = getattr(self, "_chunk_content_progressive_lock", None)
+        if lock is None:
+            return
+        now = time.monotonic()
+        entries: List[Dict[str, object]] = []
+        with lock:
+            pending_files = int(getattr(self, "_chunk_content_progressive_files", 0))
+            last_update = float(getattr(self, "_chunk_content_progressive_last_update", 0.0))
+            if not force:
+                if pending_files < 20 and now - last_update < 0.3:
+                    return
+            if pending_files == 0 and not force:
+                return
+            entries = list(self._chunk_content_progressive_pending)
+            self._chunk_content_progressive_pending.clear()
+            self._chunk_content_progressive_files = 0
+            self._chunk_content_progressive_last_update = now
+        if entries:
+            self._chunk_content_entries.extend(entries)
+            self._chunk_content_limits_changed = False
+            self._apply_chunk_content_filter()
+
+    def _request_chunk_content_index(self, *, force: bool, deep_scan: bool) -> None:
         if self._chunk_content_dialog is None:
             return
         if self._chunk_content_future is not None:
@@ -9970,6 +10021,14 @@ class MapUiMixin:
         existing = None if force else load_chunk_content_entry(save_path)
         desired_total = int(self._chunk_content_max_total)
         desired_per = int(self._chunk_content_max_per_chunk)
+        if existing and not force:
+            limits = existing.get("limits") if isinstance(existing, dict) else None
+            if (
+                not isinstance(limits, dict)
+                or limits.get("max_total") != desired_total
+                or limits.get("max_per_chunk") != desired_per
+            ):
+                existing = None
         index = self._scan_chunk_file_index(save_path)
         map_index = index.get("map", {})
         chunkdata_index = index.get("chunkdata", {})
@@ -9992,7 +10051,8 @@ class MapUiMixin:
             source = "map"
         log_service.runtime_debug(
             f"[ChunkContent] request build={build} source={source} "
-            f"map={len(map_index)} chunkdata={len(chunkdata_index)} force={force}",
+            f"map={len(map_index)} chunkdata={len(chunkdata_index)} "
+            f"force={force} deep_scan={deep_scan}",
             "ChunkContent",
         )
         self._chunk_content_last_source = source
@@ -10022,12 +10082,48 @@ class MapUiMixin:
                 or limits.get("max_per_chunk") != desired_per
             ):
                 existing = None
+        resume_entry = None
+        pending_files: List[str] = []
+        if existing and not force:
+            resume_entry = prepare_chunk_content_resume_entry(
+                save_path,
+                target_index,
+                existing,
+                source=source,
+                max_entries_total=desired_total,
+                max_entries_per_chunk=desired_per,
+            )
+            if isinstance(resume_entry, dict):
+                pending_files = resume_entry.get("pending_files", [])
+                if not isinstance(pending_files, list):
+                    pending_files = []
+                self._apply_chunk_content_entry(resume_entry, save_entry=False)
+            if pending_files:
+                try:
+                    save_chunk_content_entry(save_path, resume_entry)
+                except Exception:
+                    pass
+            if not pending_files and not deep_scan:
+                return
+        else:
+            self._chunk_content_entries = []
+            self._chunk_content_filtered = []
+            self._chunk_content_partial = False
+            self._chunk_content_limits_changed = False
+            self._chunk_content_page = 0
+            self._apply_chunk_content_filter()
         with self._chunk_content_progress_lock:
             self._chunk_content_progress = {
                 "done": 0,
                 "total": len(target_index),
                 "phase": "",
             }
+        lock = getattr(self, "_chunk_content_progressive_lock", None)
+        if lock is not None:
+            with lock:
+                self._chunk_content_progressive_pending = []
+                self._chunk_content_progressive_files = 0
+                self._chunk_content_progressive_last_update = time.monotonic()
 
         def progress_cb(done: int, total: int, phase: str) -> None:
             with self._chunk_content_progress_lock:
@@ -10035,18 +10131,26 @@ class MapUiMixin:
                 self._chunk_content_progress["total"] = total
                 self._chunk_content_progress["phase"] = phase
 
+        def progressive_cb(entries: List[Dict[str, object]], _path_key: str) -> None:
+            self._queue_chunk_content_progressive_entries(entries)
+
         use_process_pool = len(target_index) >= 64
+        fast_dir_check = not deep_scan and not force
         self._chunk_content_cancel_event = threading.Event()
         self._chunk_content_future = get_index_executor().submit(
             build_chunk_content_index,
             save_path,
             target_index,
             existing=existing,
+            resume_entry=resume_entry,
+            progressive=True,
+            progressive_cb=progressive_cb,
             max_entries_total=desired_total,
             max_entries_per_chunk=desired_per,
             progress_cb=progress_cb,
             source=source,
             use_process_pool=use_process_pool,
+            fast_dir_check=fast_dir_check,
             cancel_event=self._chunk_content_cancel_event,
         )
         self._update_chunk_content_status(running=True)
@@ -10062,10 +10166,12 @@ class MapUiMixin:
             self._chunk_content_future = None
             return
         if not future.done():
+            self._apply_chunk_content_progressive_updates()
             self._update_chunk_content_status(running=True)
             return
         self._chunk_content_timer.stop()
         self._chunk_content_future = None
+        self._apply_chunk_content_progressive_updates(force=True)
         try:
             entry = future.result()
         except Exception:
@@ -10094,17 +10200,44 @@ class MapUiMixin:
                 for items in file_entries.values():
                     if isinstance(items, list):
                         entry_count += len(items)
-        entry_partial = bool(entry.get("partial")) if isinstance(entry, dict) else False
+        partial_reason = ""
+        if isinstance(entry, dict):
+            partial_reason = str(entry.get("partial_reason") or "")
+        should_fallback = False
+        if partial_reason == "error":
+            should_fallback = True
+        elif entry_count == 0 and partial_reason not in ("resume", "limit"):
+            should_fallback = True
         if (
-            (entry_count == 0 or entry_partial)
+            should_fallback
             and self._chunk_content_last_source == "chunkdata"
             and self._chunk_content_has_map_index
             and not self._chunk_content_fallback_used
         ):
             self._chunk_content_fallback_used = True
             self._chunk_content_force_map = True
-            self._request_chunk_content_index(force=True)
+            self._request_chunk_content_index(force=True, deep_scan=True)
             return
+
+        # 添加空错误结果保护：如果新结果为空且错误，但UI中已有数据，则不保存
+        current_count = len(getattr(self, "_chunk_content_entries", []) or [])
+        if entry_count == 0 and partial_reason == "error" and current_count > 0:
+            from services.log_service import log_service
+            log_service.runtime_debug(
+                "[ChunkContent] toolbar: preserve existing non-empty list; "
+                f"drop empty error result current={current_count}",
+                "ChunkContent",
+            )
+            self._update_chunk_content_status(running=False)
+            InfoBar.warning(
+                title=tr("common.notice"),
+                content=tr("save.map.content.index.failed"),
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=2800,
+            )
+            return
+
         save_chunk_content_entry(self.save_info.path, entry)
         entries: List[Dict[str, object]] = []
         if isinstance(entry, dict):

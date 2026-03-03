@@ -13,9 +13,10 @@ from __future__ import annotations
 import os
 import re
 import struct
+import threading
 import zlib
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 # Chunk dimensions
 B41_CHUNK_SIZE = 10  # 10×10 = 100 GridSquares
@@ -26,6 +27,9 @@ CELL_TILE_SIZE = 300  # Map cells are 300x300 tiles in worldmap data
 HEADER_SIZE = 17  # debug(1) + version(4) + length(4) + crc(8)
 CRC_OFFSET = 9    # CRC starts at byte 9
 MIN_VERSION_FOR_CRC = 61  # Only version >= 61 has extended header
+
+_BUILD_VERSION_CACHE: Dict[str, Optional[str]] = {}
+_BUILD_VERSION_CACHE_LOCK = threading.Lock()
 
 
 def detect_build_version(save_path: Path, debug: bool = False) -> Optional[str]:
@@ -127,6 +131,28 @@ def detect_build_version(save_path: Path, debug: bool = False) -> Optional[str]:
     if debug:
         print("[detect] Unknown structure, defaulting to B41")
     return "B41"
+
+
+def detect_build_version_cached(save_path: Path) -> Optional[str]:
+    """
+    Cached wrapper for build detection to avoid repeated directory probing
+    during large chunk scans.
+    """
+    if not isinstance(save_path, Path):
+        return detect_build_version(save_path)
+    normalized = save_path
+    if normalized.name.lower() in ("map", "chunkdata"):
+        parent = normalized.parent
+        if isinstance(parent, Path) and parent.exists():
+            normalized = parent
+    cache_key = str(normalized)
+    with _BUILD_VERSION_CACHE_LOCK:
+        if cache_key in _BUILD_VERSION_CACHE:
+            return _BUILD_VERSION_CACHE[cache_key]
+    result = detect_build_version(normalized, debug=False)
+    with _BUILD_VERSION_CACHE_LOCK:
+        _BUILD_VERSION_CACHE[cache_key] = result
+    return result
 
 
 def _find_chunk_files(save_path: Path, max_count: int = 10) -> Tuple[list, str]:
@@ -723,7 +749,7 @@ def get_chunk_params(save_path: Path) -> Tuple[int, float]:
         (tile_per_chunk, chunks_per_cell) tuple
         chunks_per_cell can be non-integer for B42 (300 / 8 = 37.5)
     """
-    build = detect_build_version(save_path)
+    build = detect_build_version_cached(save_path)
 
     if build == "B42":
         tile_per_chunk = B42_CHUNK_SIZE

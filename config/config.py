@@ -136,6 +136,41 @@ class AppConfig(QConfig):
         validator=BoolValidator()
     )
 
+    chunk_batch_translation = ConfigItem(
+        group="Advanced",
+        name="ChunkBatchTranslation",
+        default=True,
+        validator=BoolValidator()
+    )
+
+    chunk_shared_dictionary = ConfigItem(
+        group="Advanced",
+        name="ChunkSharedDictionary",
+        default=True,
+        validator=BoolValidator()
+    )
+
+    chunk_adaptive_cache = ConfigItem(
+        group="Advanced",
+        name="ChunkAdaptiveCache",
+        default=True,
+        validator=BoolValidator()
+    )
+
+    chunk_loop_optimization = ConfigItem(
+        group="Advanced",
+        name="ChunkLoopOptimization",
+        default=False,
+        validator=BoolValidator()
+    )
+
+    chunk_content_save_batch_mb = ConfigItem(
+        group="Advanced",
+        name="ChunkContentSaveBatchMB",
+        default=50,
+        validator=IntRangeValidator(10, 512, 50)
+    )
+
     # ===== Mod order settings =====
     mod_order = ConfigItem(
         group="Mods",
@@ -147,6 +182,13 @@ class AppConfig(QConfig):
         group="Mods",
         name="ModWatchEnabled",
         default=True,
+        validator=BoolValidator()
+    )
+
+    mod_watch_usn_enabled = ConfigItem(
+        group="Mods",
+        name="ModWatchUsnEnabled",
+        default=False,
         validator=BoolValidator()
     )
 
@@ -256,7 +298,7 @@ class AppConfig(QConfig):
     save_backup_incremental = ConfigItem(
         group="Saves",
         name="BackupIncremental",
-        default=False,
+        default=True,
         validator=BoolValidator()
     )
 

@@ -24,7 +24,19 @@ from services.vehicle_blob_parser import _skip_device_data
 from services.world_dictionary_service import load_world_dictionary_mapping
 from utils.bytebuffer_reader import ByteBufferReader
 from utils.pz_string_codec import read_string, read_string_utf
-from utils.save_version_utils import _get_erosion_data_length, detect_build_version, get_chunk_params
+from utils.save_version_utils import (
+    _get_erosion_data_length,
+    detect_build_version_cached,
+    get_chunk_params,
+)
+
+try:
+    from config import cfg
+except Exception:  # pragma: no cover - fallback for isolated test runs
+    class _Cfg:
+        chunk_loop_optimization = False
+
+    cfg = _Cfg()
 
 
 _OBJECT_ID_TO_NAME: Dict[int, str] = {
@@ -224,7 +236,11 @@ def _skip_chunk_header(
         debug_flag = _read_u8_with_copy(reader, copy_to)
         debug_mode = debug_flag == 1
         world_version = _read_i32_with_copy(reader, copy_to)
-        if world_version <= 0 or world_version > 1000:
+        if world_version <= 0 or world_version > 10000:
+            log_service.runtime_debug(
+                f"[ChunkContent] world_version out of range: {world_version}",
+                "ChunkContent"
+            )
             return None, debug_mode
         if world_version >= 61:
             if reader.remaining() < 12:
@@ -407,7 +423,7 @@ def scan_chunk_object_summary(
     global _ACTIVE_BUILD
     prev_build = _ACTIVE_BUILD
     prev_local_build = _get_active_build()
-    build = detect_build_version(save_path)
+    build = detect_build_version_cached(save_path)
     _ACTIVE_BUILD = build
     _set_active_build(build)
     dictionary = load_world_dictionary_mapping(save_path)
@@ -817,7 +833,7 @@ def scan_chunk_registry_offsets(
     global _ACTIVE_BUILD
     prev_build = _ACTIVE_BUILD
     prev_local_build = _get_active_build()
-    build = detect_build_version(save_path)
+    build = detect_build_version_cached(save_path)
     _ACTIVE_BUILD = build
     _set_active_build(build)
     if dictionary is None:
@@ -973,13 +989,22 @@ def scan_chunk_content_entries(
     chunk_y: int,
     *,
     max_entries: int = 5000,
+    build_hint: Optional[str] = None,
 ) -> Tuple[List[Dict[str, object]], bool]:
     if not data:
+        log_service.runtime_debug(
+            f"[ChunkContent] EMPTY_DATA chunk=({chunk_x},{chunk_y})",
+            "ChunkContent",
+        )
         return [], True
+    log_service.runtime_debug(
+        f"[ChunkContent] parse_start chunk=({chunk_x},{chunk_y}) bytes={len(data)}",
+        "ChunkContent",
+    )
     global _ACTIVE_BUILD
     prev_build = _ACTIVE_BUILD
     prev_local_build = _get_active_build()
-    build = detect_build_version(save_path)
+    build = build_hint or detect_build_version_cached(save_path)
     _ACTIVE_BUILD = build
     _set_active_build(build)
     if build is None:
@@ -999,6 +1024,12 @@ def scan_chunk_content_entries(
     _set_active_content_collector(collector)
     try:
         world_version, debug_mode = _skip_chunk_header(reader, total_length=len(data))
+        log_service.runtime_debug(
+            f"[ChunkContent] header parsed build={build} "
+            f"chunk=({chunk_x},{chunk_y}) world_version={world_version} "
+            f"debug_mode={debug_mode} bytes={len(data)}",
+            "ChunkContent",
+        )
         if world_version is None:
             log_service.runtime_debug(
                 f"[ChunkContent] header invalid build={build} "
@@ -1007,170 +1038,155 @@ def scan_chunk_content_entries(
             )
             return entries, True
         total_tiles = tile_per_chunk * tile_per_chunk
+        log_service.runtime_debug(
+            f"[ChunkContent] processing tiles chunk=({chunk_x},{chunk_y}) "
+            f"total_tiles={total_tiles} tile_per_chunk={tile_per_chunk} "
+            f"is_b42={_is_b42_build()}",
+            "ChunkContent",
+        )
         dummy_items: Counter = Counter()
-        for tile_index in range(total_tiles):
-            if reader.remaining() <= 0:
+        def _process_grid_square(tile_x: int, tile_y: int, z_level: int) -> bool:
+            if collector.max_entries and len(entries) >= collector.max_entries:
                 collector.partial = True
-                break
-            z_flags = _read_tile_z_flags(reader, world_version)
-            tile_x = tile_index % tile_per_chunk
-            tile_y = tile_index // tile_per_chunk
-            for z_level in range(8):
-                if not (z_flags & (1 << z_level)):
-                    continue
-                context = {
-                    "chunk_x": chunk_x,
-                    "chunk_y": chunk_y,
-                    "tile_x": tile_x,
-                    "tile_y": tile_y,
-                    "z": z_level,
-                }
+                return True
+            context = {
+                "chunk_x": chunk_x,
+                "chunk_y": chunk_y,
+                "tile_x": tile_x,
+                "tile_y": tile_y,
+                "z": z_level,
+            }
+            try:
+                bit_header, object_count, _expected, _actual = _read_grid_square_header(
+                    reader,
+                    data,
+                    world_version,
+                    debug_mode=debug_mode,
+                    dictionary=dictionary,
+                    context=context,
+                )
+            except Exception as exc:
+                collector.partial = True
+                log_parse_exception(
+                    "chunk_content_grid_square_header_failed",
+                    exc,
+                    source="chunk_object_parser.content",
+                    world_version=world_version,
+                    debug_mode=debug_mode,
+                    **context,
+                )
+                return True
+            min_header = 2
+            log_service.runtime_debug(
+                f"[ChunkContent] grid square chunk=({chunk_x},{chunk_y}) "
+                f"tile=({tile_x},{tile_y}) z={z_level} objects={object_count}",
+                "ChunkContent",
+            )
+            obj_processed = 0
+            obj_skipped = 0
+            for obj_idx in range(object_count):
+                if reader.remaining() < min_header:
+                    log_service.runtime_debug(
+                        f"[ChunkContent] reader underflow chunk=({chunk_x},{chunk_y}) "
+                        f"tile=({tile_x},{tile_y}) z={z_level} obj_idx={obj_idx} "
+                        f"remaining={reader.remaining()}",
+                        "ChunkContent",
+                    )
+                    return True
                 try:
-                    bit_header, object_count, _expected, _actual = _read_grid_square_header(
-                        reader,
-                        data,
-                        world_version,
-                        debug_mode=debug_mode,
-                        dictionary=dictionary,
-                        context=context,
-                    )
-                except Exception as exc:
-                    collector.partial = True
-                    log_parse_exception(
-                        "chunk_content_grid_square_header_failed",
-                        exc,
-                        source="chunk_object_parser.content",
-                        world_version=world_version,
-                        debug_mode=debug_mode,
-                        **context,
-                    )
-                    return entries, True
-                min_header = 2
-                for _ in range(object_count):
-                    if reader.remaining() < min_header:
-                        return entries, True
                     obj_start, obj_size, exists, class_id = _read_object_header(
                         reader, world_version, debug_mode
                     )
-                    if exists == 0:
-                        if obj_size is not None and obj_size > 0:
-                            reader.seek(obj_start + obj_size)
-                        continue
-                    if class_id is None:
-                        return entries, True
-                    object_name = _OBJECT_ID_TO_NAME.get(class_id, f"Unknown({class_id})")
-                    object_category = _OBJECT_ID_TO_CATEGORY.get(class_id, "other")
-                    collector.set_context(
+                except Exception as exc:
+                    log_service.runtime_debug(
+                        f"[ChunkContent] _read_object_header FAILED chunk=({chunk_x},{chunk_y}) "
+                        f"tile=({tile_x},{tile_y}) z={z_level} obj_idx={obj_idx} "
+                        f"error={type(exc).__name__}:{exc} pos={reader.tell()}",
+                        "ChunkContent",
+                    )
+                    collector.partial = True
+                    return True
+                if exists == 0:
+                    obj_skipped += 1
+                    if obj_size is not None and obj_size > 0:
+                        reader.seek(obj_start + obj_size)
+                    continue
+                if class_id is None:
+                    log_service.runtime_debug(
+                        f"[ChunkContent] class_id is None chunk=({chunk_x},{chunk_y}) "
+                        f"tile=({tile_x},{tile_y}) z={z_level} obj_idx={obj_idx}",
+                        "ChunkContent",
+                    )
+                    return True
+                object_name = _OBJECT_ID_TO_NAME.get(class_id, f"Unknown({class_id})")
+                object_category = _OBJECT_ID_TO_CATEGORY.get(class_id, "other")
+                collector.set_context(
+                    chunk_x=chunk_x,
+                    chunk_y=chunk_y,
+                    tile_x=tile_x,
+                    tile_y=tile_y,
+                    z=z_level,
+                    object_name=object_name,
+                    object_category=object_category,
+                )
+                if object_category == "structure":
+                    collector.record_building(object_name)
+                log_service.runtime_debug(
+                    f"[ChunkContent] object chunk=({chunk_x},{chunk_y}) "
+                    f"tile=({tile_x},{tile_y}) z={z_level} class_id={class_id} "
+                    f"name={object_name} category={object_category}",
+                    "ChunkContent",
+                )
+                handler = _OBJECT_SKIP.get(class_id)
+                if handler is None:
+                    collector.partial = True
+                    log_service.runtime_debug(
+                        f"[ChunkContent] unsupported object class_id={class_id} "
+                        f"chunk=({chunk_x},{chunk_y}) tile=({tile_x},{tile_y})",
+                        "ChunkContent",
+                    )
+                    log_parse_debug(
+                        "chunk_content_object_unsupported",
+                        source="chunk_object_parser.content",
                         chunk_x=chunk_x,
                         chunk_y=chunk_y,
                         tile_x=tile_x,
                         tile_y=tile_y,
                         z=z_level,
+                        class_id=class_id,
                         object_name=object_name,
                         object_category=object_category,
+                        world_version=world_version,
+                        debug_mode=debug_mode,
+                        obj_size=obj_size,
                     )
-                    if object_category == "structure":
-                        collector.record_building(object_name)
-                    handler = _OBJECT_SKIP.get(class_id)
-                    if handler is None:
-                        collector.partial = True
-                        log_parse_debug(
-                            "chunk_content_object_unsupported",
-                            source="chunk_object_parser.content",
-                            chunk_x=chunk_x,
-                            chunk_y=chunk_y,
-                            tile_x=tile_x,
-                            tile_y=tile_y,
-                            z=z_level,
+                    if obj_size is None:
+                        if _skip_unknown_object(
+                            reader,
+                            world_version,
+                            debug_mode,
+                            dictionary,
+                            dummy_items,
                             class_id=class_id,
-                            object_name=object_name,
-                            object_category=object_category,
-                            world_version=world_version,
-                            debug_mode=debug_mode,
-                            obj_size=obj_size,
-                        )
-                        if obj_size is None:
-                            if _skip_unknown_object(
-                                reader,
-                                world_version,
-                                debug_mode,
-                                dictionary,
-                                dummy_items,
+                        ):
+                            log_parse_debug(
+                                "chunk_content_object_fallback",
+                                source="chunk_object_parser.content",
+                                chunk_x=chunk_x,
+                                chunk_y=chunk_y,
+                                tile_x=tile_x,
+                                tile_y=tile_y,
+                                z=z_level,
                                 class_id=class_id,
-                            ):
-                                log_parse_debug(
-                                    "chunk_content_object_fallback",
-                                    source="chunk_object_parser.content",
-                                    chunk_x=chunk_x,
-                                    chunk_y=chunk_y,
-                                    tile_x=tile_x,
-                                    tile_y=tile_y,
-                                    z=z_level,
-                                    class_id=class_id,
-                                    object_name=object_name,
-                                    object_category=object_category,
-                                    world_version=world_version,
-                                    debug_mode=debug_mode,
-                                )
-                                continue
-                        if obj_size is not None and obj_size > 0:
-                            reader.seek(obj_start + obj_size)
-                        else:
-                            resync_start = reader.tell()
-                            candidate = _find_object_header(
-                                data,
-                                resync_start,
+                                object_name=object_name,
+                                object_category=object_category,
+                                world_version=world_version,
                                 debug_mode=debug_mode,
                             )
-                            if candidate is not None:
-                                log_parse_debug(
-                                    "chunk_content_object_resync",
-                                    source="chunk_object_parser.content",
-                                    chunk_x=chunk_x,
-                                    chunk_y=chunk_y,
-                                    tile_x=tile_x,
-                                    tile_y=tile_y,
-                                    z=z_level,
-                                    class_id=class_id,
-                                    object_name=object_name,
-                                    object_category=object_category,
-                                    world_version=world_version,
-                                    debug_mode=debug_mode,
-                                    start=resync_start,
-                                    actual_pos=candidate,
-                                    delta=candidate - resync_start,
-                                )
-                                reader.seek(candidate)
-                                continue
-                            reader.seek(len(data))
-                            return entries, True
-                        continue
-                    try:
-                        handler(reader, world_version, debug_mode, dictionary, dummy_items)
-                    except Exception as exc:
-                        collector.partial = True
-                        log_parse_exception(
-                            "chunk_content_object_failed",
-                            exc,
-                            source="chunk_object_parser.content",
-                            chunk_x=chunk_x,
-                            chunk_y=chunk_y,
-                            tile_x=tile_x,
-                            tile_y=tile_y,
-                            z=z_level,
-                            class_id=class_id,
-                            object_name=object_name,
-                            object_category=object_category,
-                            world_version=world_version,
-                            debug_mode=debug_mode,
-                            obj_size=obj_size,
-                            obj_start=obj_start,
-                            pos=reader.tell(),
-                            remaining=reader.remaining(),
-                        )
-                        if obj_size is not None and obj_size > 0:
-                            reader.seek(obj_start + obj_size)
                             continue
+                    if obj_size is not None and obj_size > 0:
+                        reader.seek(obj_start + obj_size)
+                    else:
                         resync_start = reader.tell()
                         candidate = _find_object_header(
                             data,
@@ -1198,28 +1214,129 @@ def scan_chunk_content_entries(
                             reader.seek(candidate)
                             continue
                         reader.seek(len(data))
-                        return entries, True
-                    if object_category == "container":
-                        collector.ensure_container_recorded(object_name)
+                        return True
+                    continue
+                try:
+                    handler(reader, world_version, debug_mode, dictionary, dummy_items)
+                except Exception as exc:
+                    collector.partial = True
+                    log_parse_exception(
+                        "chunk_content_object_failed",
+                        exc,
+                        source="chunk_object_parser.content",
+                        chunk_x=chunk_x,
+                        chunk_y=chunk_y,
+                        tile_x=tile_x,
+                        tile_y=tile_y,
+                        z=z_level,
+                        class_id=class_id,
+                        object_name=object_name,
+                        object_category=object_category,
+                        world_version=world_version,
+                        debug_mode=debug_mode,
+                        obj_size=obj_size,
+                        obj_start=obj_start,
+                        pos=reader.tell(),
+                        remaining=reader.remaining(),
+                    )
                     if obj_size is not None and obj_size > 0:
                         reader.seek(obj_start + obj_size)
-                if debug_mode:
-                    if reader.remaining() < 4:
-                        return entries, True
-                    reader.skip(4)
-                if bit_header & 64:
-                    _skip_grid_square_extra(
-                        reader,
-                        world_version,
-                        debug_mode,
-                        dictionary,
-                        data=data,
-                        context=context,
+                        continue
+                    resync_start = reader.tell()
+                    candidate = _find_object_header(
+                        data,
+                        resync_start,
+                        debug_mode=debug_mode,
                     )
-                if _is_b42_build():
-                    if reader.remaining() < 1:
+                    if candidate is not None:
+                        log_parse_debug(
+                            "chunk_content_object_resync",
+                            source="chunk_object_parser.content",
+                            chunk_x=chunk_x,
+                            chunk_y=chunk_y,
+                            tile_x=tile_x,
+                            tile_y=tile_y,
+                            z=z_level,
+                            class_id=class_id,
+                            object_name=object_name,
+                            object_category=object_category,
+                            world_version=world_version,
+                            debug_mode=debug_mode,
+                            start=resync_start,
+                            actual_pos=candidate,
+                            delta=candidate - resync_start,
+                        )
+                        reader.seek(candidate)
+                        continue
+                    reader.seek(len(data))
+                    return True
+                if object_category == "container":
+                    collector.ensure_container_recorded(object_name)
+                # Track successful parsing
+                if 'parsed_objects' in dir():
+                    parsed_objects += 1
+                if obj_size is not None and obj_size > 0:
+                    reader.seek(obj_start + obj_size)
+                if collector.max_entries and len(entries) >= collector.max_entries:
+                    collector.partial = True
+                    return True
+            if debug_mode:
+                if reader.remaining() < 4:
+                    return True
+                reader.skip(4)
+            if bit_header & 64:
+                _skip_grid_square_extra(
+                    reader,
+                    world_version,
+                    debug_mode,
+                    dictionary,
+                    data=data,
+                    context=context,
+                )
+            if _is_b42_build():
+                if reader.remaining() < 1:
+                    return True
+                reader.read_u8()
+            return False
+
+        use_fast_loop = bool(getattr(cfg, "chunk_loop_optimization", False))
+        parsed_tiles = 0
+        parsed_objects = 0
+        for tile_index in range(total_tiles):
+            if collector.max_entries and len(entries) >= collector.max_entries:
+                collector.partial = True
+                return entries, True
+            if reader.remaining() <= 0:
+                collector.partial = True
+                break
+            z_flags = _read_tile_z_flags(reader, world_version)
+            parsed_tiles += 1
+            if not use_fast_loop:
+                tile_x = tile_index % tile_per_chunk
+                tile_y = tile_index // tile_per_chunk
+                for z_level in range(8):
+                    if not (z_flags & (1 << z_level)):
+                        continue
+                    if _process_grid_square(tile_x, tile_y, z_level):
                         return entries, True
-                    reader.read_u8()
+                continue
+            if z_flags == 0:
+                continue
+            tile_x = tile_index % tile_per_chunk
+            tile_y = tile_index // tile_per_chunk
+            flags = z_flags
+            z_level = 0
+            while flags:
+                if flags & 1:
+                    if _process_grid_square(tile_x, tile_y, z_level):
+                        return entries, True
+                flags >>= 1
+                z_level += 1
+        log_service.runtime_debug(
+            f"[ChunkContent] parse complete chunk=({chunk_x},{chunk_y}) "
+            f"tiles={parsed_tiles} objects={parsed_objects} entries={len(entries)}",
+            "ChunkContent",
+        )
     except Exception as exc:
         log_parse_exception(
             "chunk_content_parse_failed",
@@ -1253,7 +1370,7 @@ def purge_fire_objects_from_chunkdata(
     global _ACTIVE_BUILD
     prev_build = _ACTIVE_BUILD
     prev_local_build = _get_active_build()
-    build = detect_build_version(save_path)
+    build = detect_build_version_cached(save_path)
     _ACTIVE_BUILD = build
     _set_active_build(build)
     if dictionary is None and load_dictionary:
