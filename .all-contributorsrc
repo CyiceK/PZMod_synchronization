@@ -1,0 +1,15 @@
+{
+  "projectName": "PZMod_synchronization",
+  "projectOwner": "your-repo",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "readme.md"
+  ],
+  "imageSize": 100,
+  "contributorsPerLine": 7,
+  "commit": true,
+  "commitConvention": "angular",
+  "skipCi": true,
+  "contributors": []
+}
