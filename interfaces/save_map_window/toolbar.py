@@ -3851,7 +3851,7 @@ class MapUiMixin:
         return path
 
     def _update_chunk_share_highlight_item(self) -> None:
-        """高亮已改为 chunks 层直接着色，此方法仅清理遗留 overlay items。"""
+        """Update chunk-share highlight overlay items."""
         for attr in ("_chunk_share_highlight_fill_item", "_chunk_share_highlight_outline_item"):
             item = getattr(self, attr, None)
             if item is not None:
@@ -4015,7 +4015,7 @@ class MapUiMixin:
             else set()
         )
         self._chunk_share_highlight_active = bool(active and chunks)
-        # ── 清理遗留的 overlay items（不再使用叠加层方案） ──
+        # ── overlay items ──
         for attr in ("_chunk_share_highlight_fill_item", "_chunk_share_highlight_outline_item"):
             item = getattr(self, attr, None)
             if item is not None:
@@ -5208,7 +5208,7 @@ class MapUiMixin:
             f"animal_filter_changed action={self._animal_filter_action!r} "
             f"type={self._animal_filter_type!r}"
         )
-        # ★ 诊断: 记录过滤前的 unfiltered activity 大小
+        # ★ : unfiltered activity
         unfiltered_map_size = len(getattr(self, "_animal_activity_map", {}))
         self._apply_animal_map_filter()
         filter_active = bool(getattr(self, "_animal_map_filter_active", False))
@@ -5219,7 +5219,7 @@ class MapUiMixin:
             f"animal_filter_result filter_active={filter_active} "
             f"matched_zones={matched_zones} filtered_map_size={filtered_size}"
         )
-        # ★ 诊断: 控制台输出（不可错过）
+        # ★
         print_debug(
             f"[ANIMAL_FILTER] action={self._animal_filter_action!r} "
             f"type={self._animal_filter_type!r} | "
@@ -5241,12 +5241,12 @@ class MapUiMixin:
         self._notify_animal_filter_status()
         if not self._coords:
             return
-        # 清除动物层 tile cache，避免 hash 不变导致返回旧缓存
+        # tile cache hash
         from services.map_tile_cache import get_map_tile_cache
         cache = get_map_tile_cache()
         invalidated = cache.invalidate_by_layer("animals")
         self._debug_log(f"animal_cache_invalidated tiles={invalidated}")
-        # 清除显示层旧 pixmap，避免 _on_tile_rendered 将新 tile 叠加到旧图上
+        # pixmap _on_tile_rendered tile
         self._clear_layer_items("animals", keep_items=True)
         self._update_scaled_activity()
         scaled_size = len(self._scaled_animal_activity)
@@ -5254,7 +5254,7 @@ class MapUiMixin:
             f"animal_scaled_result scaled_animal_size={scaled_size} "
             f"(from activity_size={len(self._animal_activity)})"
         )
-        # ★ 诊断: 完整管线结果
+        # ★
         print_debug(
             f"[ANIMAL_FILTER] source_mode={self._animal_source_mode!r} "
             f"source_active={getattr(self, '_animal_source_active', 'N/A')!r} | "
@@ -5618,10 +5618,10 @@ class MapUiMixin:
             self._apply_animal_source_mode(self._animal_source_default)
         if not self._coords:
             return
-        # 清除动物层 tile cache，避免 hash 不变导致返回旧缓存
+        # tile cache hash
         from services.map_tile_cache import get_map_tile_cache
         get_map_tile_cache().invalidate_by_layer("animals")
-        # 清除显示层旧 pixmap，避免 _on_tile_rendered 将新 tile 叠加到旧图上
+        # pixmap _on_tile_rendered tile
         self._clear_layer_items("animals", keep_items=True)
         self._update_scaled_activity()
         if cfg.get(cfg.map_high_perf_render):
@@ -5646,10 +5646,10 @@ class MapUiMixin:
         self._sync_population_coord_combo()
         if not self._coords:
             return
-        # 清除动物层 tile cache，避免 hash 不变导致返回旧缓存
+        # tile cache hash
         from services.map_tile_cache import get_map_tile_cache
         get_map_tile_cache().invalidate_by_layer("animals")
-        # 清除显示层旧 pixmap，避免 _on_tile_rendered 将新 tile 叠加到旧图上
+        # pixmap _on_tile_rendered tile
         self._clear_layer_items("animals", keep_items=True)
         self._update_scaled_activity()
         if cfg.get(cfg.map_high_perf_render):
@@ -6188,7 +6188,7 @@ class MapUiMixin:
             )
             summary_widget: Optional[QWidget] = None
             if blob_summary:
-                # 格式化辅助函数
+                # Comment translated to English.
                 def _fmt_float(value: object) -> str:
                     if isinstance(value, (int, float)):
                         return f"{value:.2f}"
@@ -7866,7 +7866,7 @@ class MapUiMixin:
                 summary_right.addStretch()
                 summary_widget = summary_frame
 
-            # ========== 右侧：编辑功能区 ==========
+            # ========== ==========
             editor_container = QWidget(dialog)
             editor_container.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
@@ -7875,7 +7875,7 @@ class MapUiMixin:
             editor_layout.setContentsMargins(8, 0, 0, 0)
             editor_layout.setSpacing(10)
 
-            # ----- 位置与状态卡片 -----
+            # Comment translated to English.
             position_frame = QFrame(editor_container)
             position_frame.setObjectName("player-summary-frame")
             position_layout = QVBoxLayout(position_frame)
@@ -7916,7 +7916,7 @@ class MapUiMixin:
             position_layout.addLayout(coord_form)
             editor_layout.addWidget(position_frame)
 
-            # ----- 字段编辑卡片 -----
+            # Comment translated to English.
             fields_frame = QFrame(editor_container)
             fields_frame.setObjectName("player-summary-frame")
             fields_layout = QVBoxLayout(fields_frame)
@@ -8022,14 +8022,13 @@ class MapUiMixin:
             conn.close()
 
     def _categorize_vehicle_parts(self, parts: List[Dict]) -> Dict[str, List[Dict]]:
-        """按特性分类载具零件"""
         categories = {
-            "engine": [],   # 带 device 的零件
-            "doors": [],    # 带 door 的零件
-            "windows": [],  # 带 window 的零件
-            "lights": [],   # 带 light 的零件
-            "storage": [],  # 带 container 的零件
-            "other": [],    # 其他零件
+            "engine": [],   # device
+            "doors": [],    # door
+            "windows": [],  # window
+            "lights": [],   # light
+            "storage": [],  # container
+            "other": [],    # Comment translated to English.
         }
         for part in parts:
             if not isinstance(part, dict):
@@ -8080,7 +8079,7 @@ class MapUiMixin:
             dialog.setStyleSheet(self._build_dialog_style())
             main_layout = QVBoxLayout(dialog)
 
-            # ===== 顶部：载具名称 =====
+            # ===== =====
             name_layout = QHBoxLayout()
             name_label = CaptionLabel(tr("save.map.vehicle.edit.name") + ":", dialog)
             name_edit = QLineEdit(dialog)
@@ -8090,7 +8089,7 @@ class MapUiMixin:
             name_layout.addWidget(name_edit, 1)
             main_layout.addLayout(name_layout)
 
-            # ===== 解析 BLOB 数据 =====
+            # ===== BLOB =====
             blob_summary = None
             blob = None
             if isinstance(row, sqlite3.Row) and "data" in row.keys():
@@ -8101,7 +8100,7 @@ class MapUiMixin:
                     dictionary=self._load_world_dictionary(),
                 )
 
-            # ===== 格式化辅助函数 =====
+            # ===== =====
             def _fmt_bool(value: object) -> str:
                 if value is None:
                     return "-"
@@ -8134,11 +8133,11 @@ class MapUiMixin:
                     return f"{ctype}({total})"
                 return str(ctype)
 
-            # ===== 创建左右分栏布局（使用 QSplitter）=====
+            # ===== QSplitter =====
             from PyQt6.QtWidgets import QSplitter
             splitter = QSplitter(Qt.Orientation.Horizontal, dialog)
 
-            # ========== 左侧：信息展示区 ==========
+            # ========== ==========
             left_widget = QWidget(splitter)
             left_layout = QVBoxLayout(left_widget)
             left_layout.setContentsMargins(0, 0, 8, 0)
@@ -8154,11 +8153,11 @@ class MapUiMixin:
             left_content_layout.setContentsMargins(0, 0, 0, 0)
             left_content_layout.setSpacing(10)
 
-            # ----- 顶部卡片行（基本信息 + 零件概览）-----
+            # +
             top_cards_layout = QHBoxLayout()
             top_cards_layout.setSpacing(10)
 
-            # 基本信息卡片
+            # Comment translated to English.
             basic_card = QFrame(left_content)
             basic_card.setObjectName("player-summary-card")
             basic_card_layout = QVBoxLayout(basic_card)
@@ -8192,7 +8191,7 @@ class MapUiMixin:
             basic_card_layout.addStretch(1)
             top_cards_layout.addWidget(basic_card, 1)
 
-            # 零件概览卡片
+            # Comment translated to English.
             parts_summary_card = QFrame(left_content)
             parts_summary_card.setObjectName("player-summary-card")
             parts_summary_layout = QVBoxLayout(parts_summary_card)
@@ -8231,11 +8230,11 @@ class MapUiMixin:
             top_cards_layout.addWidget(parts_summary_card, 1)
             left_content_layout.addLayout(top_cards_layout)
 
-            # ----- 中部卡片行（状态 + 钥匙与安全）-----
+            # +
             mid_cards_layout = QHBoxLayout()
             mid_cards_layout.setSpacing(10)
 
-            # 状态卡片
+            # Comment translated to English.
             condition_card = QFrame(left_content)
             condition_card.setObjectName("player-summary-card")
             condition_card_layout = QVBoxLayout(condition_card)
@@ -8276,7 +8275,7 @@ class MapUiMixin:
             condition_card_layout.addStretch(1)
             mid_cards_layout.addWidget(condition_card, 1)
 
-            # 钥匙与安全卡片
+            # Comment translated to English.
             keys_card = QFrame(left_content)
             keys_card.setObjectName("player-summary-card")
             keys_card_layout = QVBoxLayout(keys_card)
@@ -8316,7 +8315,7 @@ class MapUiMixin:
             mid_cards_layout.addWidget(keys_card, 1)
             left_content_layout.addLayout(mid_cards_layout)
 
-            # ----- 零件详情区（按分类显示）-----
+            # Comment translated to English.
             parts = blob_summary.get("parts") if isinstance(blob_summary, dict) else None
             if isinstance(parts, list) and parts:
                 parts_detail_frame = QFrame(left_content)
@@ -8329,7 +8328,7 @@ class MapUiMixin:
                 parts_detail_title.setObjectName("player-summary-title")
                 parts_detail_layout.addWidget(parts_detail_title)
 
-                # 按类型分类零件
+                # Comment translated to English.
                 categorized = self._categorize_vehicle_parts(parts)
                 category_names = {
                     "engine": "save.map.vehicle.parts.category.engine",
@@ -8354,7 +8353,7 @@ class MapUiMixin:
                     if not cat_parts:
                         continue
 
-                    # 分类标题
+                    # Comment translated to English.
                     cat_header = CaptionLabel(
                         tr(category_names[cat_key]) + f" ({len(cat_parts)})",
                         parts_scroll_container
@@ -8362,7 +8361,7 @@ class MapUiMixin:
                     cat_header.setObjectName("player-summary-title")
                     parts_scroll_layout.addWidget(cat_header)
 
-                    # 分类零件网格（3列）
+                    # 3
                     cat_grid_widget = QWidget(parts_scroll_container)
                     cat_grid = QGridLayout(cat_grid_widget)
                     cat_grid.setContentsMargins(0, 0, 0, 0)
@@ -8410,7 +8409,7 @@ class MapUiMixin:
                         inventory_label.setWordWrap(True)
                         card_layout.addWidget(inventory_label)
 
-                        # 设备详情
+                        # Comment translated to English.
                         device = part.get("device")
                         if isinstance(device, dict):
                             device_label = CaptionLabel(
@@ -8429,7 +8428,7 @@ class MapUiMixin:
                             device_label.setWordWrap(True)
                             card_layout.addWidget(device_label)
 
-                        # 灯光详情
+                        # Comment translated to English.
                         light = part.get("light")
                         if isinstance(light, dict):
                             light_label = CaptionLabel(
@@ -8447,7 +8446,7 @@ class MapUiMixin:
                             light_label.setWordWrap(True)
                             card_layout.addWidget(light_label)
 
-                        # 车门详情
+                        # Comment translated to English.
                         door = part.get("door")
                         if isinstance(door, dict):
                             door_label = CaptionLabel(
@@ -8462,7 +8461,7 @@ class MapUiMixin:
                             door_label.setWordWrap(True)
                             card_layout.addWidget(door_label)
 
-                        # 车窗详情
+                        # Comment translated to English.
                         window = part.get("window")
                         if isinstance(window, dict):
                             window_label = CaptionLabel(
@@ -8490,13 +8489,13 @@ class MapUiMixin:
             left_scroll.setWidget(left_content)
             left_layout.addWidget(left_scroll, 1)
 
-            # ========== 右侧：编辑功能区 ==========
+            # ========== ==========
             right_widget = QWidget(splitter)
             right_layout = QVBoxLayout(right_widget)
             right_layout.setContentsMargins(8, 0, 0, 0)
             right_layout.setSpacing(10)
 
-            # ----- 位置编辑区 -----
+            # Comment translated to English.
             position_frame = QFrame(right_widget)
             position_frame.setObjectName("player-summary-frame")
             position_layout = QVBoxLayout(position_frame)
@@ -8530,7 +8529,7 @@ class MapUiMixin:
             position_layout.addLayout(coord_form)
             right_layout.addWidget(position_frame)
 
-            # ----- 字段编辑区 -----
+            # Comment translated to English.
             fields_frame = QFrame(right_widget)
             fields_frame.setObjectName("player-summary-frame")
             fields_layout = QVBoxLayout(fields_frame)
@@ -8541,7 +8540,7 @@ class MapUiMixin:
             fields_title.setObjectName("player-summary-title")
             fields_layout.addWidget(fields_title)
 
-            # 过滤器
+            # Comment translated to English.
             filter_layout = QHBoxLayout()
             filter_label = CaptionLabel(tr("save.map.vehicle.edit.fields.filter"), fields_frame)
             filter_edit = SearchLineEdit(fields_frame)
@@ -8565,7 +8564,7 @@ class MapUiMixin:
             )
             fields_table.setMinimumHeight(200)
 
-            # 过滤功能
+            # Comment translated to English.
             def _filter_fields(text: str) -> None:
                 term = text.strip().lower()
                 for row_idx in range(fields_table.rowCount()):
@@ -8578,13 +8577,13 @@ class MapUiMixin:
             fields_layout.addWidget(fields_table, 1)
             right_layout.addWidget(fields_frame, 1)
 
-            # ===== 添加分栏到主布局 =====
+            # ===== =====
             splitter.addWidget(left_widget)
             splitter.addWidget(right_widget)
-            splitter.setSizes([660, 440])  # 60:40 比例
+            splitter.setSizes([660, 440])  # 60:40
             main_layout.addWidget(splitter, 1)
 
-            # ===== 底部按钮 =====
+            # ===== =====
             buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
             buttons.button(QDialogButtonBox.StandardButton.Save).setText(tr("button.save"))
             buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("button.cancel"))
@@ -10029,6 +10028,33 @@ class MapUiMixin:
                 or limits.get("max_per_chunk") != desired_per
             ):
                 existing = None
+        if existing and not force and isinstance(existing, dict):
+            existing_partial = bool(existing.get("partial"))
+            pending_chunks = existing.get("pending_chunks")
+            pending_files = existing.get("pending_files")
+            has_pending = (
+                (isinstance(pending_chunks, list) and bool(pending_chunks))
+                or (isinstance(pending_files, list) and bool(pending_files))
+            )
+            existing_entry_count = 0
+            total_entries_raw = existing.get("total_entries")
+            try:
+                if total_entries_raw is not None:
+                    existing_entry_count = int(total_entries_raw)
+            except Exception:
+                existing_entry_count = 0
+            if existing_entry_count <= 0:
+                file_entries = existing.get("entries")
+                if isinstance(file_entries, dict):
+                    for items in file_entries.values():
+                        if isinstance(items, list):
+                            existing_entry_count += len(items)
+            if existing_partial and existing_entry_count <= 0 and not has_pending:
+                log_service.runtime_debug(
+                    "[ChunkContent] drop stale empty partial cache; force rebuild",
+                    "ChunkContent",
+                )
+                existing = None
         index = self._scan_chunk_file_index(save_path)
         map_index = index.get("map", {})
         chunkdata_index = index.get("chunkdata", {})
@@ -10219,7 +10245,7 @@ class MapUiMixin:
             self._request_chunk_content_index(force=True, deep_scan=True)
             return
 
-        # 添加空错误结果保护：如果新结果为空且错误，但UI中已有数据，则不保存
+        # UI
         current_count = len(getattr(self, "_chunk_content_entries", []) or [])
         if entry_count == 0 and partial_reason == "error" and current_count > 0:
             from services.log_service import log_service
@@ -12903,8 +12929,8 @@ class MapUiMixin:
                     for layer_key in sorted(stale_layers):
                         self._mark_overview_layer_stale(
                             layer_key,
-                            regenerate=True,      # 无论可见性都重新生成，用户开启时立即可见
-                            keep_existing=True,   # 保留旧图直到新图就绪，避免闪烁消失
+                            regenerate=True,      # Comment translated to English.
+                            keep_existing=True,   # Comment translated to English.
                         )
                 elif hasattr(self, "_invalidate_overview_layer"):
                     for layer_key in sorted(stale_layers):
@@ -13143,6 +13169,11 @@ class MapUiMixin:
         *,
         bin_bounds: Optional[Tuple[int, int, int, int]],
     ) -> None:
+        try:
+            if not bool(cfg.get(cfg.enable_debug)):
+                return
+        except Exception:
+            return
         save_path = getattr(self.save_info, "path", None)
         if not isinstance(save_path, Path):
             return

@@ -20,11 +20,11 @@ B42_CELL_TILES = 256
 BIT_VISITED = 0x01
 BIT_KNOWN = 0x02
 
-# 类型别名：用于区分不同格式的visited数据
-# B41版本使用展开后的数据（每个单元格一个字节）
-# B42版本使用打包数据（每4个单元格压缩为1个字节）
-PackedVisitedData = bytes  # 位打包的visited数据（B42格式）
-ExpandedVisitedData = bytes  # 展开后的visited数据（B41格式）
+# visited
+# B41
+# B42 41
+PackedVisitedData = bytes  # visited B42
+ExpandedVisitedData = bytes  # visited B41
 
 
 @dataclass(frozen=True)
@@ -71,20 +71,19 @@ def expected_visited_length(data: MapVisitedData) -> Optional[int]:
 
 
 def _expand_packed_visited(packed: bytes, width_units: int, height_units: int) -> bytes:
-    """将位打包的visited数据展开为原始字节数组。
+    """visited
 
-    这是一个通用的位打包/解包函数，每4个visited单元格（每个2位）
-    解压为4个字节。B41版本使用展开后的数据，B42版本使用打包数据，
-    此函数用于将打包数据解包为展开格式。
+/ 4visited 2
+4 B41 B42
+Documentation translated to English.
 
-    Args:
-        packed: 位打包的visited数据（每4个单元格压缩为1字节）
-        width_units: 宽度单元格数
-        height_units: 高度单元格数
+Args
+packed: visited 41
+width_units
+height_units
 
-    Returns:
-        展开后的字节数组（每个单元格1字节）
-    """
+Returns
+1"""
     if width_units <= 0 or height_units <= 0:
         return b""
     row_bytes = (width_units + 3) // 4
@@ -115,20 +114,19 @@ def _expand_packed_visited(packed: bytes, width_units: int, height_units: int) -
 
 
 def _pack_visited_bytes(expanded: bytes, width_units: int, height_units: int) -> bytes:
-    """将原始字节数组打包为位压缩格式。
+    """Documentation translated to English.
 
-    这是一个通用的位打包/解包函数，每4个visited单元格（每个2位）
-    压缩为1个字节。B41版本使用展开后的数据，B42版本使用打包数据，
-    此函数用于将展开数据打包为压缩格式。
+/ 4visited 2
+1 B41 B42
+Documentation translated to English.
 
-    Args:
-        expanded: 展开后的visited数据（每个单元格1字节）
-        width_units: 宽度单元格数
-        height_units: 高度单元格数
+Args
+expanded: visited 1
+width_units
+height_units
 
-    Returns:
-        位打包的字节数据（每4个单元格压缩为1字节）
-    """
+Returns
+41"""
     if width_units <= 0 or height_units <= 0:
         return b""
     row_bytes = (width_units + 3) // 4

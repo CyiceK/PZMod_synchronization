@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-从游戏文件提取 i18n 翻译数据并生成 JSON 文件。
-"""
+"""i18n JSON"""
 import json
 import re
 from pathlib import Path
@@ -9,13 +7,12 @@ from datetime import date
 
 
 def parse_item_name_file(file_path: Path) -> dict[str, str]:
-    """解析 ItemName_CN.txt 文件，返回 {key: value} 字典。"""
-    translations = {}
+    """ItemName_CN.txt {key: value}"""{}
     if not file_path.exists():
         return translations
     
     content = file_path.read_text(encoding='utf-8')
-    # 匹配格式：ItemName_模块。物品 = "中文名称"
+    # ItemName_ = ""
     pattern = r'ItemName_(\w+)\.([\w.]+)\s*=\s*"([^"]*)"'
     
     for match in re.finditer(pattern, content):
@@ -27,13 +24,12 @@ def parse_item_name_file(file_path: Path) -> dict[str, str]:
 
 
 def parse_recorded_media_file(file_path: Path) -> dict[str, str]:
-    """解析 Recorded_Media_CN.txt 文件，返回 {key: value} 字典。"""
-    translations = {}
+    """Recorded_Media_CN.txt {key: value}"""{}
     if not file_path.exists():
         return translations
     
     content = file_path.read_text(encoding='utf-8')
-    # 匹配格式：RM_标识 = "中文名称"
+    # RM_ = ""
     pattern = r'^(RM_[\w-]+)\s*=\s*"([^"]*)"'
     
     for match in re.finditer(pattern, content, re.MULTILINE):
@@ -44,22 +40,19 @@ def parse_recorded_media_file(file_path: Path) -> dict[str, str]:
 
 
 def compare_versions(b41_data: dict, b42_data: dict) -> tuple[dict, dict]:
-    """比较 b41 和 b42 数据，返回共同数据和版本差异。"""
-    common = {}
-    b42_only = {}
-    
+    """b41 b42"""   
     for key, value in b41_data.items():
         if key in b42_data:
             if b42_data[key] == value:
                 common[key] = value
             else:
-                # 版本差异
+                # Comment translated to English.
                 common[key] = value
                 b42_only[key] = b42_data[key]
         else:
             common[key] = value
     
-    # b42 新增的键
+    # b42
     for key, value in b42_data.items():
         if key not in b41_data:
             b42_only[key] = value
@@ -68,8 +61,7 @@ def compare_versions(b41_data: dict, b42_data: dict) -> tuple[dict, dict]:
 
 
 def generate_items_json(b41_path: Path, b42_path: Path, output_path: Path) -> None:
-    """生成物品翻译 JSON 文件。"""
-    print(f"解析 b41 物品文件：{b41_path}")
+    """JSON"""1 物品文件：{b41_path}")
     b41_data = parse_item_name_file(b41_path)
     print(f"  找到 {len(b41_data)} 条翻译")
     
@@ -81,7 +73,7 @@ def generate_items_json(b41_path: Path, b42_path: Path, output_path: Path) -> No
     print(f"  共同翻译：{len(common)} 条")
     print(f"  b42 差异/新增：{len(b42_diff)} 条")
     
-    # 构建 JSON 结构
+    # JSON
     output_data = {
         "_meta": {
             "category": "game_items",
@@ -101,11 +93,11 @@ def generate_items_json(b41_path: Path, b42_path: Path, output_path: Path) -> No
         "mod_overrides": {}
     }
     
-    # 如果有 b42 差异，添加到 version_overrides
+    # b42 version_overrides
     if b42_diff:
         output_data["version_overrides"]["b42"] = dict(sorted(b42_diff.items()))
     
-    # 写入文件
+    # Comment translated to English.
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
@@ -114,8 +106,7 @@ def generate_items_json(b41_path: Path, b42_path: Path, output_path: Path) -> No
 
 
 def generate_media_json(b41_path: Path, b42_path: Path, output_path: Path) -> None:
-    """生成媒体翻译 JSON 文件。"""
-    print(f"解析 b41 媒体文件：{b41_path}")
+    """JSON"""1 媒体文件：{b41_path}")
     b41_data = parse_recorded_media_file(b41_path)
     print(f"  找到 {len(b41_data)} 条翻译")
     
@@ -157,10 +148,7 @@ def generate_media_json(b41_path: Path, b42_path: Path, output_path: Path) -> No
 
 
 def generate_player_json(output_path: Path) -> None:
-    """生成玩家数据翻译 JSON 文件（基于 player_blob_parser.py 中的字段）。"""
-    # 身体部位（17 个）
-    body_parts = {
-        "Head": "头部",
+    """JSON player_blob_parser.py"""Head": "头部",
         "Neck": "颈部",
         "Torso_Upper": "胸部",
         "Torso_Lower": "腹部",
@@ -179,7 +167,7 @@ def generate_player_json(output_path: Path) -> None:
         "Foot_R": "右脚"
     }
     
-    # 技能
+    # Comment translated to English.
     skills = {
         "Fitness": "体能",
         "Strength": "力量",
@@ -213,7 +201,7 @@ def generate_player_json(output_path: Path) -> None:
         "FirstAid": "急救"
     }
     
-    # 技能分组
+    # Comment translated to English.
     skill_groups = {
         "passive": "被动",
         "agility": "敏捷",
@@ -224,7 +212,7 @@ def generate_player_json(output_path: Path) -> None:
         "other": "其他"
     }
     
-    # 特性
+    # Comment translated to English.
     traits = {
         "Brave": "勇敢",
         "Cowardly": "胆小",
@@ -261,7 +249,7 @@ def generate_player_json(output_path: Path) -> None:
         "TrappingTraining": "捕猎训练"
     }
     
-    # Moodles（状态）
+    # Moodles
     moodles = {
         "Hungry": "饥饿",
         "Thirsty": "口渴",
@@ -285,7 +273,7 @@ def generate_player_json(output_path: Path) -> None:
         "Dead": "死亡"
     }
     
-    # 状态（stats）
+    # stats
     stats = {
         "anger": "愤怒",
         "boredom": "无聊",
@@ -306,7 +294,7 @@ def generate_player_json(output_path: Path) -> None:
         "stress_from_cigarettes": "香烟压力"
     }
     
-    # 职业
+    # Comment translated to English.
     professions = {
         "none": "无业",
         "hobo": "流浪汉",
@@ -392,8 +380,7 @@ def generate_player_json(output_path: Path) -> None:
 
 
 def generate_vehicle_json(output_path: Path) -> None:
-    """生成载具数据翻译 JSON 文件。"""
-    # 载具部件
+    """JSON"""ted to English.
     parts = {
         "Engine": "引擎",
         "Battery": "电池",
@@ -480,7 +467,7 @@ def generate_vehicle_json(output_path: Path) -> None:
         "Siren": "警报器"
     }
     
-    # 部件分类
+    # Comment translated to English.
     part_categories = {
         "engine": "引擎与设备",
         "doors": "车门",
@@ -494,7 +481,7 @@ def generate_vehicle_json(output_path: Path) -> None:
         "other": "其他零件"
     }
     
-    # 载具类型
+    # Comment translated to English.
     types = {
         "Base.CarNormal": "普通轿车",
         "Base.CarSports": "跑车",
@@ -574,8 +561,7 @@ def generate_vehicle_json(output_path: Path) -> None:
 
 
 def generate_content_json(output_path: Path) -> None:
-    """生成区块内容翻译 JSON 文件。"""
-    # 容器类型
+    """JSON"""ted to English.
     containers = {
         "fridge": "冰箱",
         "freezer": "冷冻柜",
@@ -657,7 +643,7 @@ def generate_content_json(output_path: Path) -> None:
         "sarcophagus": "石棺"
     }
     
-    # 建筑类型
+    # Comment translated to English.
     buildings = {
         "house": "住宅",
         "store": "商店",
@@ -781,7 +767,7 @@ def generate_content_json(output_path: Path) -> None:
         "funeral": "殡仪馆"
     }
     
-    # 区域类型
+    # Comment translated to English.
     zones = {
         "TownZone": "城镇区域",
         "Forest": "森林",
@@ -821,7 +807,7 @@ def generate_content_json(output_path: Path) -> None:
         "Disaster": "灾区"
     }
     
-    # 对象类型
+    # Comment translated to English.
     object_types = {
         "IsoDoor": "门",
         "IsoWindow": "窗户",
@@ -911,8 +897,7 @@ def generate_content_json(output_path: Path) -> None:
 
 
 def main():
-    """主函数。"""
-    # 基础路径
+    """Documentation translated to English."""omment translated to English.
     base_path = Path(__file__).parent.parent
     demo_path = base_path / "_demo"
     output_base = base_path / "resources" / "i18n"
@@ -921,7 +906,7 @@ def main():
     print("i18n 数据提取工具")
     print("=" * 60)
     
-    # 1. 生成物品翻译
+    # 1
     print("\n[1/5] 生成物品翻译...")
     generate_items_json(
         demo_path / "b41" / "ProjectZomboid" / "media" / "lua" / "shared" / "Translate" / "CN" / "ItemName_CN.txt",
@@ -929,7 +914,7 @@ def main():
         output_base / "game" / "items_zh_CN.json"
     )
     
-    # 2. 生成媒体翻译
+    # 2
     print("\n[2/5] 生成媒体翻译...")
     generate_media_json(
         demo_path / "b41" / "ProjectZomboid" / "media" / "lua" / "shared" / "Translate" / "CN" / "Recorded_Media_CN.txt",
@@ -937,15 +922,15 @@ def main():
         output_base / "game" / "media_zh_CN.json"
     )
     
-    # 3. 生成玩家数据翻译
+    # 3
     print("\n[3/5] 生成玩家数据翻译...")
     generate_player_json(output_base / "archive" / "player_zh_CN.json")
     
-    # 4. 生成载具数据翻译
+    # 4
     print("\n[4/5] 生成载具数据翻译...")
     generate_vehicle_json(output_base / "archive" / "vehicle_zh_CN.json")
     
-    # 5. 生成区块内容翻译
+    # 5
     print("\n[5/5] 生成区块内容翻译...")
     generate_content_json(output_base / "archive" / "content_zh_CN.json")
     

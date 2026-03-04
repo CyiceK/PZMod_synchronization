@@ -236,7 +236,7 @@ class ModCard(CardWidget, ThemedMixin):
         self._update_update_label()
         self._update_dependency_label()
 
-        # Set toggle state - 确保开关状态与mod数据严格一致
+        # Set toggle state - mod
         self._sync_switch_state(bool(mod.enabled))
 
         # Set status badge.
@@ -387,7 +387,7 @@ class ModCard(CardWidget, ThemedMixin):
         self.version_combo.currentIndexChanged.connect(self._on_version_combo_changed)
 
     def _sync_switch_state(self, enabled: bool) -> None:
-        """强制同步开关状态，确保滑块与文本一致。"""
+        """Synchronize switch state without triggering signals."""
         if not hasattr(self, "switch_btn"):
             return
         switch = self.switch_btn
@@ -616,7 +616,6 @@ class ModCard(CardWidget, ThemedMixin):
             self._preview_widget.hide()
 
     def _apply_themed_colors(self):
-        """应用主题颜色 - 重写自 ThemedMixin"""
         if hasattr(self, "title_label"):
             self._set_text_color(self.title_label, TextRole.PRIMARY)
 
@@ -680,27 +679,25 @@ class ModCard(CardWidget, ThemedMixin):
         self._apply_preview_style()
 
     def prepare_for_recycle(self):
-        """
-        准备回收前清理资源引用，防止内存泄漏。
+        """Documentation translated to English.
 
-        在VirtualList回收widget时调用，清除持有的大对象引用，
-        使得这些对象能被正确回收。
-        """
-        # 清理预览图片引用
+VirtualListwidget
+Documentation translated to English."""
+        # Comment translated to English.
         self._preview_pixmap = None
         self._preview_target = None
 
-        # 清理预览窗口
+        # Comment translated to English.
         if self._preview_widget:
             self._preview_widget.hide()
             if self._preview_label:
                 self._preview_label.clear()
 
-        # 停止预览计时器
+        # Comment translated to English.
         if self._preview_timer.isActive():
             self._preview_timer.stop()
 
-        # 清理图标（设置为默认图标）
+        # Comment translated to English.
         if hasattr(self, 'icon_widget'):
             self.icon_widget.setIcon(FluentIcon.GAME)
 

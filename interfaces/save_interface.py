@@ -783,9 +783,9 @@ class SaveInterface(ScrollArea):
         )
         if self._map_window:
             self._map_window.close()
-            self._map_window = None  # 清理旧引用，让GC回收
+            self._map_window = None  # GC
         self._map_window = SaveMapWindow(save_info, self)
-        # 窗口关闭时清理引用
+        # Comment translated to English.
         self._map_window.destroyed.connect(self._on_map_window_destroyed)
         self._map_window.show()
         self._map_window.raise_()

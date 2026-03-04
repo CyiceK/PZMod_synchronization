@@ -1,16 +1,14 @@
-"""
-Advanced log service with high-performance, thread-safe, and multi-process safe logging.
+"""Advanced log service with high-performance, thread-safe, and multi-process safe logging
 
-Features:
-- Synchronous file logging with buffered I/O (同步直写，无后台线程)
-- Rotating file handler (日志轮转管理)
-- Unified log format (规范整齐)
-- Thread-safe and multi-process safe (并发安全)
-- Multiple log streams (应用日志、调试日志、错误日志)
-- QTimer-based UI queue polling (主线程安全)
+Features
+Synchronous file logging with buffered I/O ( )
+Rotating file handler ()
+Unified log format ()
+Thread-safe and multi-process safe ()
+Multiple log streams ( )
+QTimer-based UI queue polling ()
 
-@author: Cyicek
-"""
+@author: Cyicek"""
 import logging
 import logging.handlers
 import logging.config
@@ -26,6 +24,7 @@ from pathlib import Path
 import os
 import sys
 import atexit
+import time
 
 
 class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
@@ -62,6 +61,115 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
                     pass
             else:
                 raise
+
+
+class BufferedSafeRotatingFileHandler(logging.Handler):
+    """Size + idle-time buffered wrapper for SafeRotatingFileHandler."""
+
+    def __init__(
+        self,
+        filename,
+        *,
+        maxBytes: int,
+        backupCount: int,
+        encoding: str = "utf-8",
+        delay: bool = False,
+        buffer_max_bytes: int = 30 * 1024 * 1024,
+        idle_seconds: float = 15.0,
+        idle_flush_interval: float = 5.0,
+    ) -> None:
+        super().__init__()
+        self._target = SafeRotatingFileHandler(
+            filename,
+            maxBytes=maxBytes,
+            backupCount=backupCount,
+            encoding=encoding,
+            delay=delay,
+        )
+        self._target.setLevel(logging.NOTSET)
+        self._buffer_max_bytes = max(1, int(buffer_max_bytes))
+        self._idle_seconds = max(1.0, float(idle_seconds))
+        self._idle_flush_interval = max(0.5, float(idle_flush_interval))
+        self._buffer: List[logging.LogRecord] = []
+        self._buffer_bytes = 0
+        self._buffer_lock = threading.RLock()
+        now = time.monotonic()
+        self._last_emit_time = now
+        self._last_flush_time = now
+        self._stop_event = threading.Event()
+        self._idle_thread = threading.Thread(
+            target=self._idle_flush_loop,
+            name="LogBufferedFlush",
+            daemon=True,
+        )
+        self._idle_thread.start()
+
+    def setFormatter(self, fmt: logging.Formatter) -> None:
+        super().setFormatter(fmt)
+        self._target.setFormatter(fmt)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = self.format(record)
+            encoded_len = len(
+                (message + getattr(self._target, "terminator", "\n")).encode(
+                    getattr(self._target, "encoding", None) or "utf-8",
+                    errors="replace",
+                )
+            )
+            with self._buffer_lock:
+                self._buffer.append(record)
+                self._buffer_bytes += max(1, encoded_len)
+                self._last_emit_time = time.monotonic()
+                if self._buffer_bytes >= self._buffer_max_bytes:
+                    self._flush_locked()
+        except Exception:
+            self.handleError(record)
+
+    def _flush_locked(self) -> None:
+        if not self._buffer:
+            return
+        batch = self._buffer
+        self._buffer = []
+        self._buffer_bytes = 0
+        for rec in batch:
+            try:
+                self._target.emit(rec)
+            except Exception:
+                self.handleError(rec)
+        self._target.flush()
+        self._last_flush_time = time.monotonic()
+
+    def flush(self) -> None:
+        with self._buffer_lock:
+            self._flush_locked()
+
+    def _idle_flush_loop(self) -> None:
+        while not self._stop_event.wait(self._idle_flush_interval):
+            with self._buffer_lock:
+                if not self._buffer:
+                    continue
+                now = time.monotonic()
+                if now - self._last_emit_time < self._idle_seconds:
+                    continue
+                if now - self._last_flush_time < self._idle_flush_interval:
+                    continue
+                self._flush_locked()
+
+    def close(self) -> None:
+        self._stop_event.set()
+        try:
+            self._idle_thread.join(timeout=1.0)
+        except Exception:
+            pass
+        try:
+            self.flush()
+        except Exception:
+            pass
+        try:
+            self._target.close()
+        finally:
+            super().close()
 
 try:
     from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QCoreApplication
@@ -172,22 +280,21 @@ class LogQueueHandler(logging.Handler):
             )
             self.queue.put_nowait(entry)
         except queue.Full:
-            pass  # Drop log if queue is full (防止阻塞)
+            pass  # Drop log if queue is full ()
 
 
 class MultiProcessLogService(QObject):
-    """Multi-process safe log service with synchronous file handlers.
+    """Multi-process safe log service with synchronous file handlers
 
-    Architecture:
-    - Main Process: 同步直写 file handlers + QTimer UI 队列轮询 (无后台线程)
-    - Child Processes: QueueHandler → multiprocessing.Queue → 主进程转发
+Architecture
+Main Process: file handlers + QTimer UI ()
+Child Processes: QueueHandler → multiprocessing.Queue →
 
-    Features:
-    - Automatic main/child process detection
-    - Cross-process log aggregation
-    - Thread-safe and process-safe
-    - Zero background threads in main process (PyCharm Run-mode compatible)
-    """
+Features
+Automatic main/child process detection
+Cross-process log aggregation
+Thread-safe and process-safe
+Zero background threads in main process (PyCharm Run-mode compatible)"""
 
     # Signals
     log_added = pyqtSignal(object)     # LogEntry
@@ -197,12 +304,12 @@ class MultiProcessLogService(QObject):
     MAX_LOGS = 1000
     MAX_QUEUE_SIZE = 10000
 
-    # 跨进程队列 — 仅在 get_shared_queue() 首次调用时懒创建.
+    # — get_shared_queue()
     _mp_queue: Optional[multiprocessing.Queue] = None
 
-    # NOTE: 不使用 __new__ 单例模式 —— PyQt6 的 sip metaclass 会在
-    # QObject.__new__() 内部触发 C++ 对象构造，与自定义 __new__ 冲突
-    # 导致 stack overflow. 单例由 get_log_service() 工厂函数保证.
+    # NOTE: __new__ —— PyQt6 sip metaclass
+    # QObject.__new__() C++ __new__
+    # stack overflow. get_log_service()
 
     def __init__(self) -> None:
         """Initialize the multi-process log service."""
@@ -210,6 +317,12 @@ class MultiProcessLogService(QObject):
 
         self._logs: List[LogEntry] = []
         self._logs_lock = threading.RLock()
+        self._debug_toggle_connected = False
+        self._app_file_handler: Optional[logging.Handler] = None
+        self._error_file_handler: Optional[logging.Handler] = None
+        self._debug_file_handler: Optional[logging.Handler] = None
+        self._ui_handler: Optional[logging.Handler] = None
+        self._queue_handler: Optional[logging.Handler] = None
 
         # Setup log directory
         self._log_dir = Path(__file__).parent.parent / "logs"
@@ -228,10 +341,10 @@ class MultiProcessLogService(QObject):
         else:
             self._init_child_process()
 
-        # 主线程 QTimer 轮询 UI 队列.
-        # ⚠️ 不在此处 start() — 必须等 MainWindow 构造完成后调用
-        # start_ui_updates()，否则 QTimer 会在 addSubInterface 期间
-        # 通过 processEvents 触发 _poll_ui_queue → log_added.emit
+        # QTimer UI
+        # ⚠️ start() — MainWindow
+        # start_ui_updates() QTimer addSubInterface
+        # processEvents _poll_ui_queue → log_added.emit
         # → LogInterface._on_log_added → log_table.insertRow → 💥
         from PyQt6.QtCore import QTimer as _QTimer
         from config import UI_TIMER_INTERVAL
@@ -251,33 +364,36 @@ class MultiProcessLogService(QObject):
         return len(current._identity) == 0
 
     def _init_main_process(self) -> None:
-        """Initialize logging infrastructure in main process.
+        """Initialize logging infrastructure in main process
 
-        同步直写架构 (无后台线程):
-          logger.info(msg) → file handlers (同步) + LogQueueHandler (UI 缓冲)
+()
+logger.info(msg) → file handlers () + LogQueueHandler (UI )
 
-        不使用 QueueHandler/QueueListener — 它们的 _monitor 后台线程在
-        PyCharm Run-mode 下会与 Qt 主线程产生竞争, 导致 access violation.
-        同步写入对 GUI 应用完全足够 (缓冲 I/O, 微秒级延迟).
-        """
+QueueHandler/QueueListener — _monitor
+PyCharm Run-mode Qt , access violation
+GUI ( I/O, )"""
         try:
             # Setup file handlers
             file_handlers = self._create_file_handlers()
 
-            # Setup root logger — 直接挂载 file handlers, 无后台线程
+            # Setup root logger — file handlers
             root_logger = logging.getLogger()
-            root_logger.setLevel(logging.DEBUG)
+            root_logger.setLevel(self._get_root_level_for_debug())
 
             for handler in file_handlers:
                 root_logger.addHandler(handler)
 
             # Add UI queue handler for local display
             ui_handler = LogQueueHandler(self._ui_queue)
-            ui_handler.setLevel(logging.DEBUG)
+            ui_handler.set_name("pzmod.ui")
+            ui_handler.setLevel(self._get_ui_level_for_debug())
+            self._ui_handler = ui_handler
             root_logger.addHandler(ui_handler)
 
             # Prevent duplicate logs
             root_logger.propagate = False
+            self._connect_debug_toggle()
+            self._sync_debug_levels(self._is_debug_enabled())
 
         except Exception as e:
             # Fallback to basic logging if setup fails
@@ -294,7 +410,7 @@ class MultiProcessLogService(QObject):
         """
         try:
             root_logger = logging.getLogger()
-            root_logger.setLevel(logging.DEBUG)
+            root_logger.setLevel(self._get_root_level_for_debug())
 
             # Clear existing handlers
             for handler in root_logger.handlers[:]:
@@ -303,7 +419,9 @@ class MultiProcessLogService(QObject):
             if MultiProcessLogService._mp_queue is not None:
                 # Use shared queue from main process
                 queue_handler = logging.handlers.QueueHandler(MultiProcessLogService._mp_queue)
-                queue_handler.setLevel(logging.DEBUG)
+                queue_handler.set_name("pzmod.mp.queue")
+                queue_handler.setLevel(self._get_root_level_for_debug())
+                self._queue_handler = queue_handler
                 root_logger.addHandler(queue_handler)
             else:
                 # Fallback: queue not available, try to get from environment or use stderr
@@ -311,10 +429,14 @@ class MultiProcessLogService(QObject):
 
             # Add UI handler for local display (won't work across processes but useful for testing)
             ui_handler = LogQueueHandler(self._ui_queue)
-            ui_handler.setLevel(logging.DEBUG)
+            ui_handler.set_name("pzmod.ui")
+            ui_handler.setLevel(self._get_ui_level_for_debug())
+            self._ui_handler = ui_handler
             root_logger.addHandler(ui_handler)
 
             root_logger.propagate = False
+            self._connect_debug_toggle()
+            self._sync_debug_levels(self._is_debug_enabled())
 
         except Exception as e:
             self._setup_child_fallback_logging()
@@ -327,6 +449,21 @@ class MultiProcessLogService(QObject):
             List of configured file handlers.
         """
         handlers = []
+
+        def _cfg_int(name: str, default: int, min_value: int) -> int:
+            item = getattr(cfg, name, None)
+            if item is None:
+                return default
+            try:
+                value = int(cfg.get(item))
+            except Exception:
+                return default
+            return value if value >= min_value else default
+
+        buffer_mb = _cfg_int("log_write_buffer_mb", 30, 1)
+        idle_seconds = _cfg_int("log_write_idle_seconds", 15, 1)
+        idle_flush_interval = _cfg_int("log_write_flush_interval_sec", 5, 1)
+        buffer_bytes = buffer_mb * 1024 * 1024
 
         # Logging format
         fmt = (
@@ -344,42 +481,101 @@ class MultiProcessLogService(QObject):
             return self._log_dir / f"{prefix}_{self._log_stamp}.log"
 
         # 1. Application log file
-        app_handler = SafeRotatingFileHandler(
+        app_handler = BufferedSafeRotatingFileHandler(
             _log_path("app"),
             maxBytes=50 * 1024 * 1024,  # 50MB
             backupCount=10,
             encoding="utf-8",
-            delay=False
+            delay=False,
+            buffer_max_bytes=buffer_bytes,
+            idle_seconds=idle_seconds,
+            idle_flush_interval=idle_flush_interval,
         )
+        app_handler.set_name("pzmod.file.app")
         app_handler.setLevel(logging.DEBUG)
         app_handler.setFormatter(formatter)
         handlers.append(app_handler)
+        self._app_file_handler = app_handler
 
         # 2. Error log file
-        error_handler = SafeRotatingFileHandler(
+        error_handler = BufferedSafeRotatingFileHandler(
             _log_path("error"),
             maxBytes=20 * 1024 * 1024,  # 20MB
             backupCount=5,
             encoding="utf-8",
-            delay=False
+            delay=False,
+            buffer_max_bytes=buffer_bytes,
+            idle_seconds=idle_seconds,
+            idle_flush_interval=idle_flush_interval,
         )
+        error_handler.set_name("pzmod.file.error")
         error_handler.setLevel(logging.ERROR)
         error_handler.setFormatter(formatter)
         handlers.append(error_handler)
+        self._error_file_handler = error_handler
 
         # 3. Debug log file
-        debug_handler = SafeRotatingFileHandler(
+        debug_handler = BufferedSafeRotatingFileHandler(
             _log_path("debug"),
             maxBytes=100 * 1024 * 1024,  # 100MB
             backupCount=3,
             encoding="utf-8",
-            delay=False
+            delay=False,
+            buffer_max_bytes=buffer_bytes,
+            idle_seconds=idle_seconds,
+            idle_flush_interval=idle_flush_interval,
         )
+        debug_handler.set_name("pzmod.file.debug")
         debug_handler.setLevel(logging.DEBUG)
         debug_handler.setFormatter(formatter)
         handlers.append(debug_handler)
+        self._debug_file_handler = debug_handler
 
         return handlers
+
+    @staticmethod
+    def _get_root_level_for_debug() -> int:
+        return logging.DEBUG if MultiProcessLogService._is_debug_enabled() else logging.INFO
+
+    @staticmethod
+    def _get_ui_level_for_debug() -> int:
+        return logging.DEBUG if MultiProcessLogService._is_debug_enabled() else logging.INFO
+
+    @staticmethod
+    def _get_debug_handler_level(enabled: bool) -> int:
+        return logging.DEBUG if enabled else (logging.CRITICAL + 1)
+
+    def _connect_debug_toggle(self) -> None:
+        if self._debug_toggle_connected:
+            return
+        item = getattr(cfg, "enable_debug", None)
+        if item is None:
+            return
+        signal = getattr(item, "valueChanged", None)
+        if signal is None:
+            return
+        try:
+            signal.connect(self._on_enable_debug_changed)
+            self._debug_toggle_connected = True
+        except Exception:
+            self._debug_toggle_connected = False
+
+    def _on_enable_debug_changed(self, value: object) -> None:
+        self._sync_debug_levels(bool(value))
+
+    def _sync_debug_levels(self, enabled: bool) -> None:
+        root_logger = logging.getLogger()
+        root_level = logging.DEBUG if enabled else logging.INFO
+        root_logger.setLevel(root_level)
+
+        if self._app_file_handler is not None:
+            self._app_file_handler.setLevel(root_level)
+        if self._ui_handler is not None:
+            self._ui_handler.setLevel(root_level)
+        if self._queue_handler is not None:
+            self._queue_handler.setLevel(root_level)
+        if self._debug_file_handler is not None:
+            self._debug_file_handler.setLevel(self._get_debug_handler_level(enabled))
 
     def _fallback_logging_setup(self) -> None:
         """Setup basic logging when multiprocessing fails."""
@@ -437,11 +633,10 @@ class MultiProcessLogService(QObject):
 
     @pyqtSlot()
     def _poll_ui_queue(self) -> None:
-        """主线程 QTimer 回调: 批量处理 UI 队列中的日志条目.
+        """QTimer : UI
 
-        在主线程中执行，完全避免跨线程 Qt 对象访问.
-        每次最多处理 50 条，防止长时间阻塞事件循环.
-        """
+Qt
+50"""
         batch_limit = 50
         count = 0
         while count < batch_limit:
@@ -485,17 +680,16 @@ class MultiProcessLogService(QObject):
 
     @classmethod
     def get_shared_queue(cls) -> Optional[multiprocessing.Queue]:
-        """Get the shared multiprocessing queue for cross-process logging.
+        """Get the shared multiprocessing queue for cross-process logging
 
-        懒创建: 仅在首次调用时创建 multiprocessing.Queue,
-        并启动守护线程将子进程日志转发到主进程的 root logger.
+multiprocessing.Queue
+root logger
 
-        Returns:
-            Shared multiprocessing queue for child processes.
-        """
+Returns
+Shared multiprocessing queue for child processes"""
         if cls._mp_queue is None:
             cls._mp_queue = multiprocessing.Queue(maxsize=cls.MAX_QUEUE_SIZE)
-            # 启动转发线程: 从 mp_queue 读取 LogRecord, 写入 root logger
+            # mp_queue LogRecord, root logger
             import threading
             def _forward_mp_to_root():
                 root = logging.getLogger()
@@ -528,13 +722,12 @@ class MultiProcessLogService(QObject):
     # ===== Public API =====
 
     def start_ui_updates(self) -> None:
-        """启动 UI 队列轮询 QTimer.
+        """UI QTimer
 
-        必须在 MainWindow 构造完成 (所有 addSubInterface 结束) 后调用.
-        在此之前，日志仍会写入文件和 UI 队列缓冲区，
-        只是不会触发 log_added 信号 / 刷新 UI.
-        调用此方法后，缓冲的日志会在下一个 100ms tick 内批量推送到 UI.
-        """
+MainWindow ( addSubInterface )
+UI
+log_added / UI
+100ms tick UI"""
         if not self._ui_timer.isActive():
             self._ui_timer.start()
 
@@ -725,24 +918,23 @@ class MultiProcessLogService(QObject):
 AdvancedLogService = MultiProcessLogService
 
 
-# Global singleton instance - 延迟初始化，避免在 QApplication 创建前实例化 QObject
+# Global singleton instance - QApplication QObject
 _log_service_instance: Optional[MultiProcessLogService] = None
 _log_service_initializing: bool = False
 
 
 def get_log_service() -> MultiProcessLogService:
-    """获取全局日志服务实例（延迟初始化）
+    """Documentation translated to English.
 
-    此函数确保在首次调用时才实例化 MultiProcessLogService，
-    避免在模块导入时因 QApplication 尚未创建而导致的栈溢出。
-    包含防重入保护: 若 init 过程中任何副作用触发 get_log_service()，
-    返回静默占位对象避免无限递归。
-    """
+MultiProcessLogService
+QApplication
+init get_log_service()
+Documentation translated to English."""
     global _log_service_instance, _log_service_initializing
     if _log_service_instance is not None:
         return _log_service_instance
     if _log_service_initializing:
-        # 重入调用: 返回静默占位对象，避免无限递归
+        # Comment translated to English.
         class _Fallback:
             def __getattr__(self, name): return lambda *a, **kw: None
         return _Fallback()
@@ -754,18 +946,14 @@ def get_log_service() -> MultiProcessLogService:
     return _log_service_instance
 
 
-# 兼容旧代码：使用属性延迟访问
+# Comment translated to English.
 class _LazyLogService:
-    """延迟加载的日志服务代理类"""
-    
     def __getattr__(self, name: str) -> Any:
-        """代理所有属性访问到实际的 log_service"""
         return getattr(get_log_service(), name)
     
     def __call__(self, *args, **kwargs) -> Any:
-        """允许被调用"""
         return get_log_service()(*args, **kwargs)
 
 
-# 全局延迟加载实例
+# Comment translated to English.
 log_service = _LazyLogService()

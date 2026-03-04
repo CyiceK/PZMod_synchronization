@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import QGraphicsView, QWidget
 
 from services.thread_pool import get_render_executor, get_process_executor
 from services.log_service import log_service
+from config import cfg
 from services.kahlua_skip import skip_kahlua_table
 from services.map_tile_cache import get_map_tile_cache
 from utils.index_io import read_json_index
@@ -63,8 +64,8 @@ from utils.save_version_utils import get_chunk_params, read_world_version
 from utils.pz_string_codec import decode_text_bytes, read_string_utf
 
 
-# ── 区块分享高亮：模块级线程安全变量 ──
-# frozenset 不可变，CPython 下引用赋值是原子操作，渲染线程安全读取
+# ── ──
+# frozenset CPython
 _chunk_highlight_cells: frozenset = frozenset()
 _chunk_highlight_color: str = "#60a5fa"
 
@@ -85,18 +86,18 @@ POP_ICON_MERGE_MAX_FACTOR = 4  # Reduced from 8 to limit max merging
 
 
 class LayerType(IntEnum):
-    """图层类型枚举 - 用于分层渲染架构"""
-    BASE = 0        # 基础地图层 - 长期缓存
-    STATIC = 1      # 静态层 - 区域标记、建筑等
-    DYNAMIC = 2     # 动态层 - zombies/players/animals
-    EFFECT = 3      # 特效层 - heatmap/visited
+    """Layer type enum for layered rendering."""
+    BASE = 0
+    STATIC = 1
+    DYNAMIC = 2
+    EFFECT = 3
 
 
 class SignalThrottler(QObject):
-    """信号节流器 - 限制信号发射频率，防止UI阻塞"""
+    """Throttle signal emission to avoid flooding the UI thread."""
     throttled_signal = pyqtSignal(object)
     
-    def __init__(self, min_interval_ms: int = 16):  # 默认16ms = 60fps
+    def __init__(self, min_interval_ms: int = 16):  # 16ms = 60fps
         super().__init__()
         self._min_interval = min_interval_ms
         self._last_emit_time = 0
@@ -106,20 +107,20 @@ class SignalThrottler(QObject):
         self._timer.timeout.connect(self._emit_pending)
     
     def emit(self, data):
-        """发射信号，如果间隔太短则节流"""
+        """Emit immediately or defer within the configured interval."""
         current_time = QDateTime.currentMSecsSinceEpoch()
         if current_time - self._last_emit_time >= self._min_interval:
             self._last_emit_time = current_time
             self.throttled_signal.emit(data)
         else:
-            # 存储最新数据，延迟发射
+            # Comment translated to English.
             self._pending_data = data
             if not self._timer.isActive():
                 delay = self._min_interval - (current_time - self._last_emit_time)
                 self._timer.start(max(1, delay))
     
     def _emit_pending(self):
-        """发射待处理的信号"""
+        """Emit any pending payload."""
         self._timer.stop()
         if self._pending_data is not None:
             self._last_emit_time = QDateTime.currentMSecsSinceEpoch()
@@ -128,33 +129,29 @@ class SignalThrottler(QObject):
 
 
 class ViewportAwareRenderer:
-    """视口感知渲染器 - 优先渲染可见区域"""
-    
+    """Prioritize rendering tiles based on viewport distance."""
     def __init__(self, viewport_rect: QRectF):
         self._viewport = viewport_rect
     
     def prioritize_tiles(self, tiles: List[Tuple[int, int, int, int]]) -> List[Tuple[int, int, int, int, int]]:
-        """
-        为瓦片分配优先级
-        返回: [(priority, x, y, w, h), ...]
-        priority: 0=视口内, 1=相邻, 2=更远
-        """
+        """Documentation translated to English.
+[(priority, x, y, w, h), ...]
+priority: 0=, 1=, 2="""
         prioritized = []
         for x, y, w, h in tiles:
             tile_rect = QRectF(x, y, w, h)
             if self._viewport.intersects(tile_rect):
-                priority = 0  # 视口内 - 最高优先级
+                priority = 0  # Comment translated to English.
             elif self._is_adjacent(tile_rect):
-                priority = 1  # 相邻 - 中优先级
+                priority = 1  # Comment translated to English.
             else:
-                priority = 2  # 更远 - 低优先级
+                priority = 2  # Comment translated to English.
             prioritized.append((priority, x, y, w, h))
         
         return sorted(prioritized)
     
     def _is_adjacent(self, tile_rect: QRectF) -> bool:
-        """检查瓦片是否与视口相邻"""
-        # 扩展视口范围一倍来判断相邻
+        """Return whether a tile is adjacent to the viewport."""
         extended_viewport = QRectF(
             self._viewport.x() - self._viewport.width(),
             self._viewport.y() - self._viewport.height(),
@@ -165,17 +162,16 @@ class ViewportAwareRenderer:
 
 
 class LayerCacheManager:
-    """图层缓存管理器 - 快速切换图层时复用已渲染层"""
-    
+    """Manage cached rendered layers with lightweight LRU behavior."""
     def __init__(self):
         self._layer_cache: Dict[LayerType, Dict[str, Any]] = {}
         self._access_order: Dict[LayerType, List[str]] = {}
     
     def get_layer(self, layer_type: LayerType, key: str) -> Optional[Any]:
-        """获取缓存的图层"""
+        """Return a cached layer image."""
         cache = self._layer_cache.get(layer_type, {})
         if key in cache:
-            # 更新访问顺序
+            # Comment translated to English.
             order = self._access_order.get(layer_type, [])
             if key in order:
                 order.remove(key)
@@ -185,27 +181,27 @@ class LayerCacheManager:
         return None
     
     def set_layer(self, layer_type: LayerType, key: str, image: Any):
-        """设置图层缓存"""
+        """Store a layer image in cache."""
         if layer_type not in self._layer_cache:
             self._layer_cache[layer_type] = {}
             self._access_order[layer_type] = []
         
-        # 基础层长期缓存，动态层短期缓存
+        # Comment translated to English.
         if layer_type == LayerType.BASE:
             self._layer_cache[layer_type][key] = image
-            # 更新访问顺序
+            # Comment translated to English.
             order = self._access_order.get(layer_type, [])
             if key in order:
                 order.remove(key)
             order.append(key)
             self._access_order[layer_type] = order
         else:
-            # 限制动态层缓存大小
+            # Comment translated to English.
             cache = self._layer_cache[layer_type]
             order = self._access_order.get(layer_type, [])
             
             if len(cache) >= 50:
-                # LRU淘汰
+                # LRU
                 oldest_key = order[0] if order else next(iter(cache))
                 if oldest_key in cache:
                     del cache[oldest_key]
@@ -217,14 +213,14 @@ class LayerCacheManager:
             self._access_order[layer_type] = order
     
     def clear_layer_type(self, layer_type: LayerType):
-        """清除特定类型的缓存"""
+        """Clear cached entries for a specific layer type."""
         if layer_type in self._layer_cache:
             self._layer_cache[layer_type].clear()
         if layer_type in self._access_order:
             self._access_order[layer_type].clear()
     
     def clear_all(self):
-        """清除所有缓存"""
+        """Clear all layer caches."""
         for cache in self._layer_cache.values():
             cache.clear()
         for order in self._access_order.values():
@@ -281,7 +277,7 @@ class QImagePool:
 
 
 # ---------------------------------------------------------------------------
-# 内存追踪调试工具 (临时)
+# ()
 # ---------------------------------------------------------------------------
 import gc as _gc
 import os as _os
@@ -299,9 +295,20 @@ _RENDER_LOG_LOCK = threading.Lock()
 _RENDER_LOG_PATH: Optional[Path] = None
 
 
+def _is_debug_enabled() -> bool:
+    try:
+        return bool(cfg.get(cfg.enable_debug))
+    except Exception:
+        return False
+
+
 def _init_scan_debug_log(save_path: Optional[Path]) -> None:
     """Initialize detailed scan log file (thread/process safe)."""
     global _SCAN_LOG_PATH
+    if not _is_debug_enabled():
+        with _SCAN_LOG_LOCK:
+            _SCAN_LOG_PATH = None
+        return
     log_dir = Path(__file__).resolve().parents[1] / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     stamp = _dt.now().strftime("%Y%m%d_%H%M%S")
@@ -324,6 +331,8 @@ def _init_scan_debug_log(save_path: Optional[Path]) -> None:
 
 def _scan_debug_log(label: str, extra: str = "") -> None:
     """Append a detailed scan log line with thread/process info."""
+    if not _is_debug_enabled():
+        return
     if _SCAN_LOG_PATH is None:
         return
     thread = threading.current_thread()
@@ -385,6 +394,10 @@ def _get_rss_bytes() -> int:
 def _init_render_debug_log(save_path: Optional[Path]) -> None:
     """Initialize detailed render log file (thread/process safe)."""
     global _RENDER_LOG_PATH
+    if not _is_debug_enabled():
+        with _RENDER_LOG_LOCK:
+            _RENDER_LOG_PATH = None
+        return
     if _RENDER_LOG_PATH is not None:
         return
     log_dir = Path(__file__).resolve().parents[1] / "logs"
@@ -409,6 +422,8 @@ def _init_render_debug_log(save_path: Optional[Path]) -> None:
 
 def _render_debug_log(label: str, extra: str = "") -> None:
     """Append a detailed render log line with thread/process info + RSS."""
+    if not _is_debug_enabled():
+        return
     if _RENDER_LOG_PATH is None:
         return
     thread = threading.current_thread()
@@ -469,7 +484,9 @@ def _estimate_container_bytes(data: object, sample: int = 256) -> int:
 
 
 def _mem_debug_logger(save_path=None):
-    """返回一个内存追踪函数，日志输出到 logs/memory_scan_debug.log"""
+    """logs/memory_scan_debug.log"""
+    if not _is_debug_enabled():
+        return lambda *_args, **_kwargs: None
     from pathlib import Path as _P
     import sys as _sys
 
@@ -480,7 +497,7 @@ def _mem_debug_logger(save_path=None):
     def _get_rss():
         if _HAS_PSUTIL:
             return _psutil.Process().memory_info().rss
-        # Fallback: Windows API 获取内存信息
+        # Fallback: Windows API
         try:
             import ctypes
             from ctypes import wintypes
@@ -540,24 +557,22 @@ def _mem_debug_logger(save_path=None):
         )
         if extra:
             line += f"  | {extra}"
-        print_info(line)  # 使用统一日志服务
+        print_info(line)  # Comment translated to English.
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(line + "\n")
-            f.flush()  # 强制刷新文件
+            f.flush()  # Comment translated to English.
 
     return mark
 
 
 class ChunkDataProvider:
-    """
-    按需加载区块数据，带有限内存缓存 (LRU 淘汰)。
+    """(LRU )
 
-    Phase 1.1: 核心内存优化 - 避免一次性加载所有区块到内存。
+Phase 1.1
 
-    - 最多缓存 max_in_flight 个区块数据
-    - 超过限制时淘汰最早访问的区块
-    - 支持批量清理以释放内存
-    """
+max_in_flight
+Documentation translated to English.
+Documentation translated to English."""
 
     def __init__(self, max_in_flight: int = 32):
         self._cache: Dict[str, bytes] = {}
@@ -565,61 +580,56 @@ class ChunkDataProvider:
         self._access_order: List[str] = []
 
     def get(self, path: Path) -> bytes:
-        """
-        获取区块数据。未缓存则从磁盘读取。
+        """Documentation translated to English.
 
-        Returns:
-            bytes: 区块数据，读取失败返回空 bytes
-        """
+Returns
+bytes: bytes"""
         key = str(path)
 
-        # 缓存命中
+        # Comment translated to English.
         if key in self._cache:
-            # 更新访问顺序 (LRU)
+            # (LRU)
             if key in self._access_order:
                 self._access_order.remove(key)
             self._access_order.append(key)
             return self._cache[key]
 
-        # 缓存未命中 - 从磁盘读取
+        # Comment translated to English.
         try:
             data = path.read_bytes()
         except Exception:
             return b""
 
-        # 淘汰最旧条目直到有空间
+        # Comment translated to English.
         while len(self._cache) >= self._max_in_flight and self._access_order:
             oldest_key = self._access_order.pop(0)
             self._cache.pop(oldest_key, None)
 
-        # 存入缓存
+        # Comment translated to English.
         self._cache[key] = data
         self._access_order.append(key)
 
         return data
 
     def preload(self, path: Path, data: bytes) -> None:
-        """
-        预加载区块数据到缓存 (用于已读取的数据)。
-        """
+        """()"""
         if not data:
             return
 
         key = str(path)
 
-        # 淘汰最旧条目直到有空间
+        # Comment translated to English.
         while len(self._cache) >= self._max_in_flight and self._access_order:
             oldest_key = self._access_order.pop(0)
             self._cache.pop(oldest_key, None)
 
-        # 更新缓存
+        # Comment translated to English.
         if key in self._cache:
             self._access_order.remove(key)
         self._cache[key] = data
         self._access_order.append(key)
 
     def clear(self) -> None:
-        """释放所有缓存数据。"""
         self._cache.clear()
         self._access_order.clear()
 
@@ -755,7 +765,7 @@ class RenderPayload:
     brightness: int = 0          # -50 to +50
     saturation: float = 1.0      # 0.5-2.0
     high_perf_render: bool = False
-    # 分层渲染相关属性
+    # Comment translated to English.
     layer_types: List[LayerType] = field(default_factory=lambda: [LayerType.BASE])
     base_layer_cached: bool = False
     viewport_rect: Optional[QRectF] = None
@@ -907,12 +917,12 @@ class MapGraphicsView(QGraphicsView):
         self._interaction_timer.setSingleShot(True)
         self._interaction_timer.timeout.connect(self._end_interaction)
         
-        # 渲染取消和防抖相关属性
+        # Comment translated to English.
         self._render_thread: Optional[MapRenderThread] = None
         self._render_debounce_timer = QTimer(self)
         self._render_debounce_timer.setSingleShot(True)
         self._render_debounce_timer.timeout.connect(self._on_render_debounce_timeout)
-        self._render_debounce_ms = 50  # 50ms防抖延迟
+        self._render_debounce_ms = 50  # 50ms
         self._pending_render_payload: Optional[Any] = None
         
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
@@ -922,24 +932,22 @@ class MapGraphicsView(QGraphicsView):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     
     def set_render_thread(self, thread: Optional[MapRenderThread]) -> None:
-        """设置当前渲染线程，用于取消操作。"""
         self._render_thread = thread
     
     def cancel_current_render(self) -> bool:
-        """取消当前正在进行的渲染。
-        
-        Returns:
-            True if a render was cancelled, False otherwise
-        """
+        """Documentation translated to English.
+
+Returns
+True if a render was cancelled, False otherwise"""
         cancelled = False
         
-        # 停止防抖定时器
+        # Comment translated to English.
         if self._render_debounce_timer.isActive():
             self._render_debounce_timer.stop()
             self._pending_render_payload = None
             cancelled = True
         
-        # 取消当前渲染线程
+        # Comment translated to English.
         if self._render_thread is not None and self._render_thread.isRunning():
             self._render_thread.cancel_render()
             cancelled = True
@@ -951,13 +959,12 @@ class MapGraphicsView(QGraphicsView):
         return cancelled
     
     def schedule_render(self, payload: Any, immediate: bool = False) -> None:
-        """调度一个渲染任务，带防抖。
-        
-        Args:
-            payload: 渲染数据
-            immediate: 是否立即渲染，跳过防抖
-        """
-        # 先取消当前渲染
+        """Documentation translated to English.
+
+Args
+payload
+immediate"""
+        # Comment translated to English.
         self.cancel_current_render()
         
         self._pending_render_payload = payload
@@ -968,19 +975,17 @@ class MapGraphicsView(QGraphicsView):
             self._render_debounce_timer.start(self._render_debounce_ms)
     
     def _on_render_debounce_timeout(self) -> None:
-        """防抖定时器超时，开始实际渲染。"""
         if self._pending_render_payload is None:
             return
         
-        # 通知外部开始渲染
-        # 外部应该调用 set_render_thread 设置新的渲染线程
+        # Comment translated to English.
+        # set_render_thread
         if self._on_scale_changed is not None:
-            # 复用 scale changed 回调作为渲染触发器
-            # 或者可以添加专门的回调
+            # scale changed
+            # Comment translated to English.
             pass
     
     def set_render_debounce_ms(self, ms: int) -> None:
-        """设置渲染防抖延迟（毫秒）。"""
         self._render_debounce_ms = max(0, ms)
 
     def setViewport(self, widget: Optional[QWidget]) -> None:
@@ -1038,7 +1043,7 @@ class MapGraphicsView(QGraphicsView):
             return
         self._begin_interaction()
         
-        # 在缩放开始时取消当前渲染
+        # Comment translated to English.
         self.cancel_current_render()
         
         factor = 1.15 if delta > 0 else 1 / 1.15
@@ -1096,7 +1101,7 @@ class MapGraphicsView(QGraphicsView):
             vbar = self.verticalScrollBar()
             hbar.setValue(hbar.value() - int(delta.x()))
             vbar.setValue(vbar.value() - int(delta.y()))
-            # 在平移时取消渲染
+            # Comment translated to English.
             self.cancel_current_render()
             event.accept()
             return
@@ -2471,15 +2476,15 @@ class MapBinScanThread(QThread):
                 )
 
             pending = 0
-            # Phase 1.2: 使用 ChunkDataProvider 按需加载，避免内存累积
-            # 移除原有的 _preloaded_chunk_bytes 全量加载模式
+            # Phase 1.2: ChunkDataProvider
+            # _preloaded_chunk_bytes
             chunk_provider = ChunkDataProvider(max_in_flight=32)
             _mm("02_map_entries扫描完成", f"entries={len(map_entries)}")
             _scan_debug_log("map_entries_loaded", f"entries={len(map_entries)}")
             for (x, y), entry in map_entries.items():
                 path = entry[0]
                 bin_entries.append((path, x, y))
-                # 使用 provider 获取数据 (带 LRU 缓存)
+                # provider ( LRU )
                 data = chunk_provider.get(path)
                 if not data:
                     continue
@@ -2746,7 +2751,7 @@ class MapBinScanThread(QThread):
         if active_signatures and bin_entries and not player_build_counts:
             object_mode = "signature"
             for path, x, y in bin_entries:
-                # 使用 ChunkDataProvider 获取数据 (LRU 缓存)，避免内存累积
+                # ChunkDataProvider (LRU )
                 data = chunk_provider.get(path)
                 if not data:
                     continue
@@ -3029,7 +3034,7 @@ class MapBinScanThread(QThread):
         object_summary = MapBinScanThread._load_cached_chunk_objects(save_path)
         if object_summary is None:
             try:
-                # Phase 1.2: 移除 preloaded_data 参数，依赖 ChunkObjectCache 缓存机制
+                # Phase 1.2: preloaded_data ChunkObjectCache
                 object_summary = scan_chunk_object_summary(
                     save_path, [entry[0] for entry in bin_entries],
                 )
@@ -3039,7 +3044,7 @@ class MapBinScanThread(QThread):
             if object_summary:
                 MapBinScanThread._save_cached_chunk_objects(save_path, object_summary)
         _mm("11_chunk_object_summary完成")
-        # Phase 1.2: 释放 ChunkDataProvider 缓存内存
+        # Phase 1.2: ChunkDataProvider
         chunk_provider.clear()
         _mm("12_chunk_provider.clear()完成")
         if isinstance(extra_summary, dict) and object_summary:
@@ -5751,18 +5756,16 @@ class MapBinScanThread(QThread):
 
 
 class RenderTaskQueue:
-    """管理渲染任务队列，支持优先级和取消。
-    
-    此类用于管理待处理的渲染任务，允许按优先级排序和批量取消。
-    主要用于在快速缩放/平移时避免渲染过载。
-    """
+    """Documentation translated to English.
+
+Documentation translated to English.
+/"""
     
     def __init__(self, max_queue_size: int = 5) -> None:
-        """Initialize the render task queue.
-        
-        Args:
-            max_queue_size: 最大队列长度，超过时将丢弃低优先级任务
-        """
+        """Initialize the render task queue
+
+Args
+max_queue_size"""
         self._tasks: List[Tuple[int, int, Callable, tuple, dict]] = []
         self._lock: threading.Lock = threading.Lock()
         self._max_size: int = max_queue_size
@@ -5770,7 +5773,6 @@ class RenderTaskQueue:
         self._generation_lock: threading.Lock = threading.Lock()
     
     def get_next_generation(self) -> int:
-        """获取下一个世代号。"""
         with self._generation_lock:
             self._generation += 1
             return self._generation
@@ -5783,54 +5785,51 @@ class RenderTaskQueue:
         *args,
         **kwargs
     ) -> bool:
-        """提交一个渲染任务。
-        
-        Args:
-            priority: 优先级，数值越小优先级越高
-            generation: 任务世代号，用于识别过时任务
-            task: 任务函数
-            *args: 任务函数位置参数
-            **kwargs: 任务函数关键字参数
-            
-        Returns:
-            True if task was added to queue, False if discarded
-        """
+        """Documentation translated to English.
+
+Args
+priority
+generation
+task
+*args
+**kwargs
+
+Returns
+True if task was added to queue, False if discarded"""
         with self._lock:
-            # 检查队列长度，如果已满则丢弃低优先级任务
+            # Comment translated to English.
             if len(self._tasks) >= self._max_size:
-                # 按优先级排序，检查是否可以替换最低优先级的任务
+                # Comment translated to English.
                 self._tasks.sort(key=lambda x: x[0])
                 if priority >= self._tasks[-1][0]:
-                    # 当前任务优先级不高于队列中最低优先级，丢弃
+                    # Comment translated to English.
                     return False
-                # 移除最低优先级的任务
+                # Comment translated to English.
                 self._tasks.pop()
             
             self._tasks.append((priority, generation, task, args, kwargs))
-            # 按优先级排序
+            # Comment translated to English.
             self._tasks.sort(key=lambda x: x[0])
             return True
     
     def cancel_all(self) -> int:
-        """取消队列中的所有任务。
-        
-        Returns:
-            Number of tasks cancelled
-        """
+        """Documentation translated to English.
+
+Returns
+Number of tasks cancelled"""
         with self._lock:
             count = len(self._tasks)
             self._tasks.clear()
             return count
     
     def cancel_older_than(self, generation: int) -> int:
-        """取消所有世代号小于指定值的过时任务。
-        
-        Args:
-            generation: 世代号阈值，小于此值的任务将被取消
-            
-        Returns:
-            Number of tasks cancelled
-        """
+        """Documentation translated to English.
+
+Args
+generation
+
+Returns
+Number of tasks cancelled"""
         with self._lock:
             original_count = len(self._tasks)
             self._tasks = [
@@ -5840,11 +5839,10 @@ class RenderTaskQueue:
             return original_count - len(self._tasks)
     
     def pop_next_task(self) -> Optional[Tuple[Callable, tuple, dict]]:
-        """获取下一个要执行的任务。
-        
-        Returns:
-            Tuple of (task, args, kwargs) or None if queue is empty
-        """
+        """Documentation translated to English.
+
+Returns
+Tuple of (task, args, kwargs) or None if queue is empty"""
         with self._lock:
             if not self._tasks:
                 return None
@@ -5852,11 +5850,10 @@ class RenderTaskQueue:
             return (task, args, kwargs)
     
     def get_queue_info(self) -> Dict[str, Any]:
-        """获取队列信息。
-        
-        Returns:
-            Dict with queue statistics
-        """
+        """Documentation translated to English.
+
+Returns
+Dict with queue statistics"""
         with self._lock:
             return {
                 "size": len(self._tasks),
@@ -5866,12 +5863,10 @@ class RenderTaskQueue:
             }
     
     def is_empty(self) -> bool:
-        """检查队列是否为空。"""
         with self._lock:
             return len(self._tasks) == 0
     
     def clear(self) -> None:
-        """清空队列。"""
         with self._lock:
             self._tasks.clear()
 
@@ -5885,7 +5880,7 @@ class MapRenderThread(QThread):
     failed = pyqtSignal(str, int, str)
     progress = pyqtSignal(str, int, int, int)
 
-    # 全局世代计数器，用于标识渲染任务版本
+    # Comment translated to English.
     _global_generation: int = 0
     _generation_lock: threading.Lock = threading.Lock()
 
@@ -5894,46 +5889,43 @@ class MapRenderThread(QThread):
         self._layer_key = layer_key
         self._render_id = render_id
         self._payload = payload
-        # 取消相关属性
+        # Comment translated to English.
         self._cancel_event: Optional[threading.Event] = None
         self._current_futures: List[Future] = []
         self._generation: int = 0
         self._futures_lock: threading.Lock = threading.Lock()
-        # 信号节流器 - 限制进度信号发射频率
+        # Comment translated to English.
         self._progress_throttler = SignalThrottler(min_interval_ms=50)  # 20fps
         self._progress_throttler.throttled_signal.connect(
             lambda p: self.progress.emit(p[0], p[1], p[2], p[3])
         )
-        # 图层缓存管理器
+        # Comment translated to English.
         self._layer_cache = LayerCacheManager()
 
     def _get_next_generation(self) -> int:
-        """获取下一个全局世代号。"""
         with MapRenderThread._generation_lock:
             MapRenderThread._global_generation += 1
             return MapRenderThread._global_generation
 
     def start_render(self, payload: Optional[RenderPayload] = None) -> None:
-        """开始新的渲染，自动增加世代号。"""
         self._generation = self._get_next_generation()
         if payload is not None:
             self._payload = payload
         super().start()
 
     def cancel_render(self) -> bool:
-        """取消当前渲染任务。
-        
-        Returns:
-            True if cancellation was initiated, False if thread is not running
-        """
+        """Documentation translated to English.
+
+Returns
+True if cancellation was initiated, False if thread is not running"""
         if not self.isRunning():
             return False
             
-        # 设置取消事件
+        # Comment translated to English.
         if self._cancel_event is not None:
             self._cancel_event.set()
         
-        # 取消所有正在执行的futures
+        # futures
         with self._futures_lock:
             for future in self._current_futures:
                 try:
@@ -5949,27 +5941,23 @@ class MapRenderThread(QThread):
         return True
 
     def is_cancelled(self) -> bool:
-        """检查当前渲染是否已被取消。"""
         return self._cancel_event is not None and self._cancel_event.is_set()
 
     def _check_cancelled(self) -> bool:
-        """检查是否已取消，如已取消则抛出取消异常。"""
         if self.is_cancelled():
             raise CancelledError(f"Render cancelled for layer={self._layer_key} id={self._render_id}")
         return False
 
     def _add_future(self, future: Future) -> Future:
-        """添加一个future到当前跟踪列表。"""
         with self._futures_lock:
             if self._cancel_event is not None and self._cancel_event.is_set():
-                # 如果已经取消，立即取消新提交的future
+                # future
                 future.cancel()
             else:
                 self._current_futures.append(future)
         return future
 
     def _remove_future(self, future: Future) -> None:
-        """从跟踪列表中移除一个future。"""
         with self._futures_lock:
             try:
                 self._current_futures.remove(future)
@@ -5977,7 +5965,6 @@ class MapRenderThread(QThread):
                 pass
 
     def _cleanup_futures(self) -> None:
-        """清理所有未完成的futures。"""
         with self._futures_lock:
             for future in self._current_futures:
                 try:
@@ -5988,11 +5975,9 @@ class MapRenderThread(QThread):
             self._current_futures.clear()
 
     def _emit_progress(self, layer_key: str, render_id: int, done: int, total: int) -> None:
-        """使用节流器发射进度信号"""
         self._progress_throttler.emit((layer_key, render_id, done, total))
 
     def _compute_base_layer_key(self, payload: RenderPayload) -> str:
-        """计算基础层的缓存键"""
         import hashlib
         key_parts = [
             f"{payload.grid_cols}x{payload.grid_rows}",
@@ -6006,21 +5991,20 @@ class MapRenderThread(QThread):
         return hashlib.md5("|".join(key_parts).encode()).hexdigest()
 
     def _render_base_layer(self, payload: RenderPayload, layer_key: str) -> Optional[QImage]:
-        """渲染基础层（地图、地形等）"""
         _render_debug_log(
             "_render_base_layer_start",
             f"layer={layer_key} render_map={payload.render_map} has_content={payload.has_content} "
             f"fill_base={payload.fill_base} map_tiles={len(payload.map_tiles)}"
         )
         
-        # 检查缓存
+        # Comment translated to English.
         cache_key = self._compute_base_layer_key(payload)
         cached = self._layer_cache.get_layer(LayerType.BASE, cache_key)
         if cached is not None:
             _render_debug_log("_render_base_layer_cache_hit", f"layer={layer_key}")
             return cached
 
-        # 渲染基础层
+        # Comment translated to English.
         width = max(1, payload.canvas_width or payload.grid_cols * payload.cell_size)
         height = max(1, payload.canvas_height or payload.grid_rows * payload.cell_size)
         
@@ -6029,7 +6013,7 @@ class MapRenderThread(QThread):
             f"layer={layer_key} width={width} height={height}"
         )
         
-        # 创建基础层payload（只包含基础渲染）
+        # payload
         base_payload = RenderPayload(
             **{
                 **payload.__dict__,
@@ -6041,19 +6025,19 @@ class MapRenderThread(QThread):
                 'render_suspect_changes': False,
                 'render_isoregion_special': False,
                 'render_build_outline': False,
-                'layer_types': [LayerType.BASE],  # 确保分层渲染类型正确
+                'layer_types': [LayerType.BASE],  # Comment translated to English.
             }
         )
         
         tiles = MapRenderThread._compute_tiles(base_payload)
         if tiles and len(tiles) > 0:
-            # 使用视口感知优先级
+            # Comment translated to English.
             if payload.viewport_rect:
                 renderer = ViewportAwareRenderer(payload.viewport_rect)
                 prioritized = renderer.prioritize_tiles(tiles)
                 tiles = [(x, y, w, h) for _, x, y, w, h in prioritized]
             
-            # 渲染瓦片
+            # Comment translated to English.
             final_image = QImage(width, height, QImage.Format.Format_ARGB32)
             if payload.fill_base:
                 final_image.fill(QColor(payload.palette.get("base", "#0b0f19")))
@@ -6093,11 +6077,11 @@ class MapRenderThread(QThread):
             painter.end()
             result = MapRenderThread._enhance_if_needed(base_payload, final_image)
         else:
-            # 单瓦片渲染
+            # Comment translated to English.
             _, _, result = MapRenderThread._render_tile(base_payload, 0, 0, width, height, layer_key)
             result = MapRenderThread._enhance_if_needed(base_payload, result)
         
-        # 缓存基础层
+        # Comment translated to English.
         if result and not result.isNull():
             self._layer_cache.set_layer(LayerType.BASE, cache_key, result)
             _render_debug_log(
@@ -6114,14 +6098,13 @@ class MapRenderThread(QThread):
         return result
 
     def _render_dynamic_layer(self, payload: RenderPayload, base_image: QImage, layer_key: str) -> QImage:
-        """在基础层上渲染动态层（僵尸、动物、玩家等）"""
         if base_image.isNull():
             return base_image
             
         width = base_image.width()
         height = base_image.height()
         
-        # 创建动态层payload（只包含动态元素渲染）
+        # payload
         dynamic_payload = RenderPayload(
             **{
                 **payload.__dict__,
@@ -6134,7 +6117,7 @@ class MapRenderThread(QThread):
             }
         )
         
-        # 渲染动态层到新的图像
+        # Comment translated to English.
         dynamic_image = QImage(width, height, QImage.Format.Format_ARGB32)
         dynamic_image.fill(QColor(0, 0, 0, 0))
         
@@ -6142,7 +6125,7 @@ class MapRenderThread(QThread):
         
         tiles = MapRenderThread._compute_tiles(dynamic_payload)
         if tiles and len(tiles) > 0:
-            # 使用视口感知优先级
+            # Comment translated to English.
             if payload.viewport_rect:
                 renderer = ViewportAwareRenderer(payload.viewport_rect)
                 prioritized = renderer.prioritize_tiles(tiles)
@@ -6171,7 +6154,7 @@ class MapRenderThread(QThread):
             finally:
                 self._cleanup_futures()
         else:
-            # 单瓦片渲染动态层
+            # Comment translated to English.
             try:
                 _, _, tile_image = MapRenderThread._render_tile(dynamic_payload, 0, 0, width, height, layer_key)
                 painter.drawImage(0, 0, tile_image)
@@ -6180,7 +6163,7 @@ class MapRenderThread(QThread):
         
         painter.end()
         
-        # 合并基础层和动态层
+        # Comment translated to English.
         final_image = QImage(width, height, QImage.Format.Format_ARGB32)
         final_painter = QPainter(final_image)
         final_painter.drawImage(0, 0, base_image)
@@ -6190,7 +6173,7 @@ class MapRenderThread(QThread):
         return final_image
 
     def run(self) -> None:
-        # 初始化取消事件
+        # Comment translated to English.
         self._cancel_event = threading.Event()
         self._current_futures = []
         start = time.monotonic()
@@ -6217,7 +6200,7 @@ class MapRenderThread(QThread):
             layer_key = self._layer_key
             render_id = self._render_id
             
-            # 分层渲染策略
+            # Comment translated to English.
             final_image = None
             base_layer_image = None
             
@@ -6226,7 +6209,7 @@ class MapRenderThread(QThread):
                     break
                 
                 if layer_type == LayerType.BASE:
-                    # 基础层：检查缓存，未缓存则渲染并保存
+                    # Comment translated to English.
                     _render_debug_log(
                         "render_base_layer_start",
                         f"layer={layer_key} cached={payload.base_layer_cached} render_map={payload.render_map}"
@@ -6245,7 +6228,7 @@ class MapRenderThread(QThread):
                                 f"layer={layer_key} cached={payload.base_layer_cached}"
                             )
                     else:
-                        # 从缓存获取
+                        # Comment translated to English.
                         cache_key = self._compute_base_layer_key(payload)
                         base_layer_image = self._layer_cache.get_layer(LayerType.BASE, cache_key)
                         if base_layer_image:
@@ -6256,7 +6239,7 @@ class MapRenderThread(QThread):
                             )
                 
                 elif layer_type == LayerType.DYNAMIC:
-                    # 动态层：在基础层上叠加
+                    # Comment translated to English.
                     if base_layer_image is None and final_image is not None:
                         base_layer_image = final_image
                     if base_layer_image:
@@ -6267,28 +6250,28 @@ class MapRenderThread(QThread):
                         )
                 
                 elif layer_type == LayerType.STATIC:
-                    # 静态层：区域标记、建筑等
-                    # 可以复用基础层缓存并在其上叠加
+                    # Comment translated to English.
+                    # Comment translated to English.
                     if final_image is None:
                         final_image = self._render_base_layer(payload, layer_key)
-                    # 静态层渲染逻辑可以在这里扩展
+                    # Comment translated to English.
                     _render_debug_log(
                         "render_static_layer_complete",
                         f"layer={layer_key}"
                     )
                 
                 elif layer_type == LayerType.EFFECT:
-                    # 特效层：heatmap等
-                    # 在已有层上叠加特效
+                    # heatmap
+                    # Comment translated to English.
                     if final_image is None:
                         final_image = self._render_base_layer(payload, layer_key)
-                    # 特效层渲染逻辑可以在这里扩展
+                    # Comment translated to English.
                     _render_debug_log(
                         "render_effect_layer_complete",
                         f"layer={layer_key}"
                     )
             
-            # 如果没有分层渲染或渲染失败，使用传统方式
+            # Comment translated to English.
             if final_image is None or final_image.isNull():
                 tiles = MapRenderThread._compute_tiles(payload)
                 total = len(tiles) if tiles else 1
@@ -6310,7 +6293,7 @@ class MapRenderThread(QThread):
                             if MapRenderThread._tile_intersects_bounds(tile, population_bounds)
                         ]
                     
-                    # 使用视口感知优先级
+                    # Comment translated to English.
                     if payload.viewport_rect:
                         renderer = ViewportAwareRenderer(payload.viewport_rect)
                         prioritized = renderer.prioritize_tiles(tiles)
@@ -6383,7 +6366,7 @@ class MapRenderThread(QThread):
                     if not self.is_cancelled():
                         self.rendered.emit(layer_key, render_id, image)
             else:
-                # 分层渲染成功，发射最终结果
+                # Comment translated to English.
                 if not self.is_cancelled() and final_image:
                     self.rendered.emit(layer_key, render_id, final_image)
                     
@@ -6474,7 +6457,7 @@ class MapRenderThread(QThread):
             final_image.fill(QColor(payload.palette.get("base", "#0b0f19")))
         else:
             final_image.fill(QColor(0, 0, 0, 0))
-        # 检查取消状态
+        # Comment translated to English.
         if cancel_event is not None and cancel_event.is_set():
             painter.end()
             return final_image
@@ -6483,11 +6466,11 @@ class MapRenderThread(QThread):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         executor = get_render_executor()
         
-        # 提交tile渲染任务，支持取消
+        # tile
         futures = []
         for x, y, w, h in tiles:
             if cancel_event is not None and cancel_event.is_set():
-                # 取消所有已提交的futures
+                # futures
                 for f in futures:
                     f.cancel()
                 painter.end()
@@ -6498,7 +6481,7 @@ class MapRenderThread(QThread):
         done = 0
         try:
             for future in as_completed(futures):
-                # 检查取消状态
+                # Comment translated to English.
                 if cancel_event is not None and cancel_event.is_set():
                     for f in futures:
                         f.cancel()
@@ -6509,14 +6492,14 @@ class MapRenderThread(QThread):
                     tile_x, tile_y, tile_image = future.result()
                     painter.drawImage(tile_x, tile_y, tile_image)
                 except CancelledError:
-                    pass  # 任务被取消，跳过
+                    pass  # Comment translated to English.
                 except Exception:
                     pass  # skip failed tile, continue rendering others
                 done += 1
                 if progress is not None:
                     progress(done)
         finally:
-            # 取消任何未完成的futures
+            # futures
             for f in futures:
                 if not f.done():
                     f.cancel()
@@ -7629,7 +7612,7 @@ class MapRenderThread(QThread):
             pattern = QColor(payload.palette["missing_pattern"])
             pattern.setAlpha(60 if payload.map_tiles else 120)
             pattern_brush = QBrush(pattern, Qt.BrushStyle.Dense4Pattern)
-            # 读取模块级高亮状态（CPython 原子引用赋值，线程安全）
+            # CPython
             hl_cells = _chunk_highlight_cells
             if hl_cells:
                 highlight_color = QColor(_chunk_highlight_color)

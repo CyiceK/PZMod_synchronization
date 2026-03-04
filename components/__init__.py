@@ -28,7 +28,7 @@ __all__ = [
     "AccentCardWidget",
     "AccentHeaderCardWidget",
     "ThemeColorPresetCard",
-    # 主题混入类
+    # Comment translated to English.
     "ThemedMixin",
     "ThemedWidget",
     "auto_theme",

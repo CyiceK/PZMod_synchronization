@@ -438,12 +438,11 @@ class SaveCard(CardWidget, ThemedMixin):
         self.version_badge.show()
 
     def _apply_themed_colors(self):
-        """应用主题颜色 - 重写自 ThemedMixin"""
-        # 设置标题颜色
+        """Apply theme colors using ThemedMixin helpers."""
         if hasattr(self, "title_label"):
             self._set_text_color(self.title_label, TextRole.PRIMARY)
 
-        # 设置次要标签颜色
+        # Comment translated to English.
         if hasattr(self, "map_label"):
             self._set_text_color(self.map_label, TextRole.SECONDARY)
 
@@ -528,27 +527,25 @@ class SaveCard(CardWidget, ThemedMixin):
             self._preview_widget.hide()
 
     def prepare_for_recycle(self):
-        """
-        准备回收前清理资源引用，防止内存泄漏。
+        """Documentation translated to English.
 
-        在VirtualList回收widget时调用，清除持有的大对象引用，
-        使得这些对象能被正确回收。
-        """
-        # 清理预览图片引用
+VirtualListwidget
+Documentation translated to English."""
+        # Comment translated to English.
         self._preview_pixmap = None
         self._preview_target = None
 
-        # 清理预览窗口
+        # Comment translated to English.
         if self._preview_widget:
             self._preview_widget.hide()
             if self._preview_label:
                 self._preview_label.clear()
 
-        # 停止预览计时器
+        # Comment translated to English.
         if self._preview_timer.isActive():
             self._preview_timer.stop()
 
-        # 清理图标（设置为默认图标）
+        # Comment translated to English.
         if hasattr(self, 'icon_widget'):
             self.icon_widget.setIcon(FluentIcon.SAVE)
 

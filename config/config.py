@@ -171,6 +171,27 @@ class AppConfig(QConfig):
         validator=IntRangeValidator(10, 512, 50)
     )
 
+    log_write_buffer_mb = ConfigItem(
+        group="Advanced",
+        name="LogWriteBufferMB",
+        default=30,
+        validator=IntRangeValidator(1, 1024, 30)
+    )
+
+    log_write_idle_seconds = ConfigItem(
+        group="Advanced",
+        name="LogWriteIdleSeconds",
+        default=15,
+        validator=IntRangeValidator(1, 300, 15)
+    )
+
+    log_write_flush_interval_sec = ConfigItem(
+        group="Advanced",
+        name="LogWriteFlushIntervalSec",
+        default=5,
+        validator=IntRangeValidator(1, 60, 5)
+    )
+
     # ===== Mod order settings =====
     mod_order = ConfigItem(
         group="Mods",

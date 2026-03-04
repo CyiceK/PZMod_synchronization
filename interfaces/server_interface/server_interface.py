@@ -1242,10 +1242,10 @@ class ServerInterface(BaseInterface):
             item = self.form_layout.takeAt(2)
             widget = item.widget()
             if widget:
-                # ⚠️ 不能使用 deleteLater(): 延迟删除事件会在后续
-                # QStackedWidget.addWidget() 或 app.exec() 中被 processEvents
-                # 触发, 导致 C++ 层面 use-after-free → access violation (0xC0000005).
-                # 使用 sip.delete() 立即销毁 C++ 对象, 避免延迟事件.
+                # ⚠️ deleteLater()
+                # QStackedWidget.addWidget() app.exec() processEvents
+                # C++ use-after-free → access violation (0xC0000005)
+                # sip.delete() C++
                 widget.setParent(None)
                 try:
                     from PyQt6 import sip

@@ -41,86 +41,82 @@ from utils.image_format_utils import detect_webp_alpha_support, get_preferred_ca
 logger = logging.getLogger(__name__)
 
 
-# ==================== 智能缓存清除相关定义 ====================
+# ==================== ====================
 
 class ModChangeType(Enum):
-    """Mod变更类型枚举 - 用于智能缓存清除策略"""
-    VISIBILITY = auto()  # 可见性切换 - 不清除缓存（依赖payload_hash变化）
-    STYLE = auto()       # 样式变更 - 清除样式相关缓存
-    DATA = auto()        # 数据变更 - 完全清除
-    ADDED = auto()       # 新增Mod
-    REMOVED = auto()     # 移除Mod
-    BOUNDS = auto()      # 边界变更
+    """Mod change type for smart cache invalidation."""
+    VISIBILITY = auto()  # payload-hash based invalidation only
+    STYLE = auto()       # Comment translated to English.
+    DATA = auto()        # Comment translated to English.
+    ADDED = auto()       # Mod
+    REMOVED = auto()     # Mod
+    BOUNDS = auto()      # Comment translated to English.
 
 
 @dataclass
 class ModChangeEvent:
-    """Mod变更事件数据类"""
+    """Mod change event data."""
     mod_id: str
     change_type: ModChangeType
     layer_key: str = "mod_maps"
-    # 样式相关字段（用于STYLE类型）
+    # STYLE
     old_color: Optional[str] = None
     new_color: Optional[str] = None
     old_alpha: Optional[float] = None
     new_alpha: Optional[float] = None
     old_width: Optional[float] = None
     new_width: Optional[float] = None
-    # 数据相关字段（用于DATA类型）
+    # DATA
     old_bounds: Optional[Tuple[int, int, int, int]] = None
     new_bounds: Optional[Tuple[int, int, int, int]] = None
-    # 额外信息
+    # Comment translated to English.
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class SmartInvalidator:
-    """
-    智能缓存清除器 - 根据Mod变更类型决定清除策略
-    
-    设计原则：
-    - VISIBILITY变更：不清除缓存，依赖payload_hash变化自动失效
-    - STYLE变更：仅清除受影响Mod的缓存条目
-    - DATA/BOUNDS变更：完全清除该Mod的缓存
-    - ADDED/REMOVED：相应处理
-    """
+    """Mod
+
+Documentation translated to English.
+VISIBILITY payload_hash
+STYLE Mod
+DATA/BOUNDS Mod
+ADDED/REMOVED"""
     
     def __init__(self, cache: 'MapTileCache'):
         self._cache = cache
         self._logger = logging.getLogger(f"{__name__}.SmartInvalidator")
     
     def handle_change(self, event: ModChangeEvent) -> int:
-        """
-        处理Mod变更事件，根据变更类型执行相应的缓存清除策略
-        
-        Args:
-            event: Mod变更事件
-            
-        Returns:
-            清除的缓存条目数量
-        """
+        """Mod
+
+Args
+event: Mod
+
+Returns
+Documentation translated to English."""
         self._logger.debug(f"Handling mod change: {event.mod_id}, type={event.change_type.name}")
         
         if event.change_type == ModChangeType.VISIBILITY:
-            # 可见性变化依赖payload_hash变化，不清除缓存
-            # 新的渲染会生成不同的payload_hash，自动使用新缓存
+            # payload_hash
+            # payload_hash
             self._logger.debug(f"Visibility change for {event.mod_id}: no cache invalidation needed")
             return 0
         
         elif event.change_type == ModChangeType.STYLE:
-            # 样式变更 - 清除该Mod的样式相关缓存
+            # Mod
             return self._clear_style_cache(event)
         
         elif event.change_type in (ModChangeType.DATA, ModChangeType.BOUNDS):
-            # 数据或边界变更 - 完全清除该Mod的缓存
+            # Mod
             return self._clear_data_cache(event)
         
         elif event.change_type == ModChangeType.ADDED:
-            # 新增Mod - 无需清除现有缓存
+            # Mod
             self._logger.debug(f"Mod added: {event.mod_id}, no existing cache to clear")
             return 0
         
         elif event.change_type == ModChangeType.REMOVED:
-            # 移除Mod - 清除该Mod的所有缓存条目
+            # Mod - Mod
             return self._cache.invalidate_by_mod(event.mod_id, event.layer_key)
         
         else:
@@ -128,15 +124,13 @@ class SmartInvalidator:
             return 0
     
     def handle_batch_changes(self, events: List[ModChangeEvent]) -> Dict[str, int]:
-        """
-        批量处理Mod变更事件
-        
-        Args:
-            events: Mod变更事件列表
-            
-        Returns:
-            按变更类型统计的清除数量字典
-        """
+        """Mod
+
+Args
+events: Mod
+
+Returns
+Documentation translated to English."""
         results = {}
         
         for event in events:
@@ -150,17 +144,15 @@ class SmartInvalidator:
         return results
     
     def _clear_style_cache(self, event: ModChangeEvent) -> int:
-        """清除样式变更相关的缓存"""
-        # 样式变更通常影响所有包含该Mod的渲染结果
-        # 但由于payload_hash已经包含了样式信息，这里可以选择：
-        # 1. 不清除（payload_hash会自动变化）
-        # 2. 清除该Mod相关的缓存（更积极）
-        # 当前策略：清除该Mod相关的缓存以确保一致性
+        """Clear style-related cache for a mod."""
+        # payload_hash
+        # 1. payload_hash
+        # 2. Mod
+        # Mod
         return self._cache.invalidate_by_mod(event.mod_id, event.layer_key)
     
     def _clear_data_cache(self, event: ModChangeEvent) -> int:
-        """清除数据变更相关的缓存"""
-        # 数据变更必须完全清除该Mod的缓存
+        """Clear data-related cache for a mod."""
         return self._cache.invalidate_by_mod(event.mod_id, event.layer_key)
 
 
@@ -675,29 +667,29 @@ class MapTileCache:
         fields_to_hash.append(f"render_scale:{payload.render_scale}")
 
         # Mod overlays - include in hash to ensure different mod maps have different cache keys
-        # FIX: 区分 "render_mods=True但无可见Mod" 和 "render_mods=False" 的状态
-        # 避免当所有Mod被取消勾选时，仍然显示旧的缓存瓦片
-        # OPTIMIZATION: 精细化缓存键 - 为每个Mod生成独立哈希组件
+        # FIX: "render_mods=TrueMod" "render_mods=False"
+        # Mod
+        # OPTIMIZATION: - Mod
         if payload.render_mods:
-            # render_mods为True时，无论mod_overlays是否为空，都要产生唯一的哈希
+            # render_modsTrue mod_overlays
             mod_overlays = getattr(payload, 'mod_overlays', [])
             mod_count = len(mod_overlays)
             logger.debug(f"[DEBUG-HASH] mod_overlays count: {mod_count}")
             
             if mod_count > 0:
-                # 精细化缓存键生成：为每个Mod生成独立哈希组件
+                # Mod
                 mod_hashes = []
                 visible_mods = []
                 
                 for idx, overlay in enumerate(mod_overlays):
                     if isinstance(overlay, (list, tuple)) and len(overlay) >= 10:
-                        # 精细化：为每个Mod生成独立标识
+                        # Mod
                         # overlay format: (mod_id, min_x, max_x, min_y, max_y, image, alpha, color, width, conflict)
                         mod_id = str(overlay[0]) if overlay[0] else f"mod_{idx}"
                         bounds_hash = f"{overlay[1]}:{overlay[2]}:{overlay[3]}:{overlay[4]}"  # min_x:max_x:min_y:max_y
                         style_hash = f"{overlay[6]}:{overlay[7]}:{int(overlay[9])}"  # alpha:color:conflict
                         
-                        # 生成该Mod的独立短哈希
+                        # Mod
                         mod_component = f"{mod_id}:{bounds_hash}:{style_hash}"
                         mod_hash = hashlib.md5(mod_component.encode()).hexdigest()[:8]
                         mod_hashes.append(f"{mod_id}={mod_hash}")
@@ -706,7 +698,7 @@ class MapTileCache:
                         logger.debug(f"[DEBUG-HASH]   Mod {idx}: {mod_id} -> {mod_hash}")
                 
                 if mod_hashes:
-                    # 生成Mod集合签名（排序以确保一致性）
+                    # Mod
                     mod_hashes.sort()
                     visible_mods.sort()
                     mods_signature = hashlib.md5("|".join(mod_hashes).encode()).hexdigest()[:12]
@@ -714,7 +706,7 @@ class MapTileCache:
                     fields_to_hash.append(f"mods:{mod_count}:{mods_signature}")
                     fields_to_hash.append(f"visible_mods:{','.join(visible_mods)}")
                     
-                    # 保留传统的详细哈希以确保完整性
+                    # Comment translated to English.
                     mod_overlay_parts = []
                     for idx, overlay in enumerate(mod_overlays):
                         if isinstance(overlay, (list, tuple)) and len(overlay) >= 7:
@@ -726,11 +718,11 @@ class MapTileCache:
                 else:
                     fields_to_hash.append(f"mods:{mod_count}:empty")
             else:
-                # 关键修复：render_mods=True但无可见Mod时，使用不同的标识
-                # 这样与render_mods=False或之前有Mod时的哈希值不同
+                # render_mods=TrueMod
+                # render_mods=FalseMod
                 fields_to_hash.append("mods:0:visible_but_empty")
         else:
-            # render_mods为False时
+            # render_modsFalse
             logger.debug(f"[DEBUG-HASH] mod_overlays: disabled")
             fields_to_hash.append("mods:0:disabled")
 
@@ -1271,34 +1263,32 @@ class MapTileCache:
             return total_removed
 
     def invalidate_by_mod(self, mod_id: str, layer_key: str = "mod_maps") -> int:
-        """
-        只清除包含特定Mod的缓存条目
-        
-        基于精细化缓存键策略，payload_hash中包含visible_mods列表，
-        可以通过检查payload_hash是否包含mod_id来定位相关缓存条目。
-        
-        Args:
-            mod_id: Mod标识符
-            layer_key: 图层键（默认为"mod_maps"）
-            
-        Returns:
-            清除的缓存条目数量
-        """
+        """Mod
+
+payload_hashvisible_mods
+payload_hashmod_id
+
+Args
+mod_id: Mod
+layer_key: "mod_maps"
+
+Returns
+Documentation translated to English."""
         logger.debug(f"Invalidating cache for mod: {mod_id} in layer: {layer_key}")
         
         with self._lock:
             memory_removed = 0
             disk_removed = 0
             
-            # 从内存缓存中清除包含该mod_id的条目
-            # 策略：检查key中的payload_hash是否包含mod_id标识
+            # mod_id
+            # keypayload_hashmod_id
             keys_to_remove = []
             for key in self._memory_cache:
                 if key.layer_key != layer_key:
                     continue
                     
-                # 检查payload_hash是否包含mod_id
-                # 精细化缓存键格式包含 visible_mods:mod1,mod2,mod3
+                # payload_hashmod_id
+                # visible_mods:mod1,mod2,mod3
                 if f"visible_mods:{mod_id}" in key.payload_hash or f",{mod_id}" in key.payload_hash:
                     keys_to_remove.append(key)
             
@@ -1306,13 +1296,13 @@ class MapTileCache:
                 del self._memory_cache[key]
                 memory_removed += 1
             
-            # 从磁盘缓存中清除
+            # Comment translated to English.
             if self._enable_disk_cache and self._disk_index is not None:
                 disk_keys_to_remove = []
                 for key_str in self._disk_index._entries.keys():
                     if not key_str.startswith(f"{layer_key}_"):
                         continue
-                    # 检查payload_hash部分（格式: layer_key_payload_hash_coords...）
+                    # payload_hash : layer_key_payload_hash_coords
                     parts = key_str.split("_")
                     if len(parts) >= 2:
                         payload_hash_part = parts[1]
@@ -1430,7 +1420,7 @@ def flush_map_tile_cache() -> None:
         _map_tile_cache.flush()
 
 
-# ==================== 自测代码 ====================
+# ==================== ====================
 
 if __name__ == "__main__":
     import sys

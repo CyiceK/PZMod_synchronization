@@ -20,20 +20,18 @@ _CACHE_VERSION = 3
 _CACHE_SAMPLE_BYTES = 64 * 1024
 _CACHE_LOCK = threading.Lock()
 
-# LRU 缓存大小限制
-_MAX_MEM_CACHE = 20  # 内存缓存最大条目数
-_MAX_SIG_CACHE = 50  # 签名缓存最大条目数
+# LRU
+_MAX_MEM_CACHE = 20  # Comment translated to English.
+_MAX_SIG_CACHE = 50  # Comment translated to English.
 
 
 class BoundedCache:
-    """
-    带 LRU 淘汰机制的有界缓存。
+    """LRU
 
-    防止无界缓存增长导致内存泄漏：
-    - 使用 OrderedDict 保持插入顺序
-    - 访问时移动到末尾（最近使用）
-    - 超过限制时淘汰最旧条目
-    """
+Documentation translated to English.
+OrderedDict
+Documentation translated to English.
+Documentation translated to English."""
 
     def __init__(self, max_size: int):
         self._cache: OrderedDict = OrderedDict()
@@ -41,7 +39,6 @@ class BoundedCache:
         self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[Dict]:
-        """获取缓存值，命中时更新访问顺序。"""
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
@@ -49,16 +46,14 @@ class BoundedCache:
             return None
 
     def set(self, key: str, value: Dict) -> None:
-        """设置缓存值，必要时淘汰最旧条目。"""
         with self._lock:
             if key in self._cache:
                 del self._cache[key]
             while len(self._cache) >= self._max_size:
-                self._cache.popitem(last=False)  # 淘汰最旧
+                self._cache.popitem(last=False)  # Comment translated to English.
             self._cache[key] = value
 
     def clear(self) -> None:
-        """清空缓存。"""
         with self._lock:
             self._cache.clear()
 
@@ -67,10 +62,10 @@ class BoundedCache:
             return len(self._cache)
 
 
-# 使用有界缓存替换原有无界字典，防止内存泄漏
+# Comment translated to English.
 _MEM_CACHE = BoundedCache(max_size=_MAX_MEM_CACHE)
 
-# 快速签名缓存，用于验证路径
+# Comment translated to English.
 # Maps cache_key → {"mtime_ns": ..., "size": ..., "full_sig": {...}}
 _QUICK_SIG_CACHE = BoundedCache(max_size=_MAX_SIG_CACHE)
 
@@ -146,7 +141,7 @@ def _load_world_dictionary_data(
     save_path: Path, *, include_items: bool
 ) -> Dict[str, object]:
     cache_key = str(save_path)
-    # Phase 2.1: BoundedCache 已内置锁，无需外部 _CACHE_LOCK
+    # Phase 2.1: BoundedCache _CACHE_LOCK
     cached = _MEM_CACHE.get(cache_key)
     if cached and (not include_items or cached.get("items") is not None):
         return cached
@@ -179,7 +174,7 @@ def _load_world_dictionary_data(
 
 
 def _store_mem_cache(key: str, entry: Dict[str, object]) -> None:
-    # Phase 2.1: 使用 BoundedCache.set() 方法，内置锁和 LRU 淘汰
+    # Phase 2.1: BoundedCache.set() LRU
     _MEM_CACHE.set(key, entry)
 
 
@@ -243,16 +238,14 @@ def _signature_match(cached: Optional[Dict[str, object]], current: Dict[str, obj
 
 
 def _file_signature_with_fast_path(path: Path, cache_key: str) -> Dict[str, object]:
-    """
-    Phase 3: Two-layer signature validation.
+    """Phase 3: Two-layer signature validation
 
-    Fast path (0.1ms): If mtime_ns + size match cached quick signature,
-    return the previously computed full signature (avoids MD5 recompute).
+Fast path (0.1ms): If mtime_ns + size match cached quick signature
+return the previously computed full signature (avoids MD5 recompute)
 
-    Slow path (50-100ms): Compute full signature with MD5 hash.
+Slow path (50-100ms): Compute full signature with MD5 hash
 
-    Phase 2.1: 使用 BoundedCache 限制缓存大小。
-    """
+Phase 2.1: BoundedCache"""
     try:
         stat = path.stat()
     except Exception:
@@ -261,7 +254,7 @@ def _file_signature_with_fast_path(path: Path, cache_key: str) -> Dict[str, obje
     mtime_ns = getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000))
     size = stat.st_size
 
-    # Fast path: check quick sig cache (BoundedCache 内置锁)
+    # Fast path: check quick sig cache (BoundedCache )
     quick = _QUICK_SIG_CACHE.get(cache_key)
     if quick is not None:
         if quick.get("mtime_ns") == mtime_ns and quick.get("size") == size:
@@ -271,7 +264,7 @@ def _file_signature_with_fast_path(path: Path, cache_key: str) -> Dict[str, obje
     # Slow path: compute full signature with MD5
     full_sig = _file_signature(path)
 
-    # Update quick sig cache (BoundedCache 内置锁和 LRU 淘汰)
+    # Update quick sig cache (BoundedCache LRU )
     _QUICK_SIG_CACHE.set(cache_key, {
         "mtime_ns": mtime_ns,
         "size": size,

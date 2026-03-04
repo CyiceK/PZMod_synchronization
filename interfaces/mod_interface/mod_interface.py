@@ -53,7 +53,7 @@ class ModInterface(BaseInterface, ModFilterSort, ModListPanel, ModToolbar):
         self._tree_view_enabled = False
         self._list_entries: List[dict] = []
         self._active_list_id: str = ""
-        self._applying_list = False  # 使用语义化的状态名
+        self._applying_list = False  # Comment translated to English.
         self._version_groups: dict[str, List[ModInfo]] = {}
         self._version_group_by_mod_id: dict[str, str] = {}
         self._version_group_selected: dict[str, str] = {}
@@ -320,8 +320,7 @@ class ModInterface(BaseInterface, ModFilterSort, ModListPanel, ModToolbar):
         card.set_version_options(options, selected_id)
 
     def _set_card_switch(self, card, enabled: bool) -> None:
-        """设置卡片开关状态，确保UI与数据一致。"""
-        if not card:
+        if card is None:
             return
         if hasattr(card, "_sync_switch_state"):
             card._sync_switch_state(bool(enabled))

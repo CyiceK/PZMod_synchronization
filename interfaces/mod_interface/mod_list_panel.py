@@ -286,7 +286,7 @@ class ModListPanel:
         dep_text, dep_missing = self._build_dependency_text(mod)
         card.set_dependency_text(dep_text, dep_missing)
         self._apply_version_selector(card)
-        # 同步开关状态，确保UI与mod数据一致
+        # UImod
         self._set_card_switch(card, mod.enabled)
 
     def _iter_visible_cards(self) -> List[ModCard]:

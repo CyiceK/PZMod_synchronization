@@ -59,9 +59,9 @@ class VirtualListWidget(QScrollArea, Generic[T]):
         # Currently rendered widget pool
         self._visible_widgets: Dict[int, QWidget] = {}
         self._recycled_widgets: List[QWidget] = []
-        # 回收池大小动态计算，不再使用固定值
-        # 实际大小 = 可见数量 + buffer * 2 + 余量
-        self._recycle_limit_base = 5  # 基础余量
+        # Comment translated to English.
+        # = + buffer * 2 +
+        self._recycle_limit_base = 5  # Comment translated to English.
         self._gap_index: Optional[int] = None
         self._gap_height = 0
         self._gap_dirty = False
@@ -327,7 +327,7 @@ class VirtualListWidget(QScrollArea, Generic[T]):
         """Recycle widget to reduce churn."""
         recycle_limit = self._get_dynamic_recycle_limit()
         if self._item_updater and len(self._recycled_widgets) < recycle_limit:
-            # 回收前清理widget持有的大对象引用
+            # widget
             if hasattr(widget, 'prepare_for_recycle'):
                 widget.prepare_for_recycle()
             self._recycled_widgets.append(widget)
@@ -335,14 +335,14 @@ class VirtualListWidget(QScrollArea, Generic[T]):
             widget.deleteLater()
 
     def _get_dynamic_recycle_limit(self) -> int:
-        """根据viewport动态计算回收池大小"""
+        """Calculate a recycle limit based on the current viewport height."""
         viewport_height = self.viewport().height()
         if viewport_height <= 0:
             return self._recycle_limit_base + self._buffer_size * 2
 
         item_total_height = self._item_height + 8
         visible_count = max(1, viewport_height // item_total_height)
-        # 回收池 = 可见数量 + 上下buffer + 基础余量
+        # = + buffer +
         return visible_count + self._buffer_size * 2 + self._recycle_limit_base
 
     def resizeEvent(self, event):

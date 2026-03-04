@@ -12,7 +12,7 @@ from config import cfg
 
 
 def log_parse_debug(message: str, *, source: str = "parser", **fields: object) -> None:
-    if not getattr(cfg, "enable_debug", False):
+    if not cfg.get(cfg.enable_debug):
         return
     path = _get_log_path()
     if path is None:

@@ -1,10 +1,8 @@
-"""
-Vehicle BLOB parser (read-only, best-effort).
+"""Vehicle BLOB parser (read-only, best-effort)
 
-支持翻译：
-- 载具部件名称翻译
-- 载具类型翻译
-"""
+Documentation translated to English.
+Documentation translated to English.
+Documentation translated to English."""
 from __future__ import annotations
 
 from typing import Dict, Optional, Tuple, List

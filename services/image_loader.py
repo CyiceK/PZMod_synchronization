@@ -88,11 +88,11 @@ class ImageLoader(QObject):
         super().__init__()
 
         # Cache (path -> QPixmap)
-        # 使用基于内存大小的LRU缓存，而非固定数量
+        # LRU
         self._cache: Dict[str, QPixmap] = {}
-        self._cache_memory_limit = 50 * 1024 * 1024  # 50MB内存限制
+        self._cache_memory_limit = 50 * 1024 * 1024  # 50MB
         self._cache_current_size = 0
-        self._cache_access_order: List[str] = []  # LRU访问顺序追踪
+        self._cache_access_order: List[str] = []  # LRU
 
         # Loading queue
         self._loading: Dict[str, ImageLoadWorker] = {}
@@ -129,7 +129,7 @@ class ImageLoader(QObject):
             # Check cache.
             if cache_key in self._cache:
                 pixmap = self._cache[cache_key]
-                # 更新LRU访问顺序
+                # LRU
                 if cache_key in self._cache_access_order:
                     self._cache_access_order.remove(cache_key)
                 self._cache_access_order.append(cache_key)
@@ -214,10 +214,10 @@ class ImageLoader(QObject):
 
     def _add_to_cache(self, key: str, pixmap: QPixmap):
         """Add to cache (memory-based LRU policy)."""
-        # 计算pixmap的内存占用 (宽 * 高 * 4字节 RGBA)
+        # pixmap ( * * 4 RGBA)
         pixmap_size = self._get_pixmap_memory_size(pixmap)
 
-        # 淘汰最旧的缓存项直到有足够空间
+        # Comment translated to English.
         while (self._cache_current_size + pixmap_size > self._cache_memory_limit
                and self._cache_access_order):
             oldest_key = self._cache_access_order.pop(0)
@@ -225,16 +225,15 @@ class ImageLoader(QObject):
                 old_pixmap = self._cache.pop(oldest_key)
                 self._cache_current_size -= self._get_pixmap_memory_size(old_pixmap)
 
-        # 添加新缓存项
+        # Comment translated to English.
         self._cache[key] = pixmap
         self._cache_current_size += pixmap_size
         self._cache_access_order.append(key)
 
     def _get_pixmap_memory_size(self, pixmap: QPixmap) -> int:
-        """计算QPixmap的内存占用（字节）"""
         if pixmap.isNull():
             return 0
-        # RGBA格式，每像素4字节
+        # RGBA 4
         return pixmap.width() * pixmap.height() * 4
 
     def clear_cache(self):

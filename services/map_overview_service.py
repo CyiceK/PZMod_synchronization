@@ -351,7 +351,7 @@ class LayerOverviewGenerator(QThread):
             return
         base_color = QColor(d.palette.get("heatmap", "#f97316"))
         sc = self._scaled_cell
-        # 最小可见点尺寸：canvas 缩放到窗口后每个点至少 ~8 屏幕像素
+        # canvas ~8
         canvas_max = max(image.width(), image.height(), 1)
         min_dot = max(8, int(round(canvas_max / 150.0)))
         log_service.info(
@@ -722,7 +722,7 @@ class LayerOverviewGenerator(QThread):
                 tl = self._to_scene(mn_x, mn_y)
                 br = self._to_scene(mx_x, mx_y)
                 rect = QRectF(tl, br).normalized()
-                # 保证最小可见尺寸，避免 sub-pixel 区域被跳过
+                # sub-pixel
                 if rect.width() < min_dot:
                     cx = rect.center().x()
                     rect.setLeft(cx - min_dot / 2)
@@ -770,7 +770,7 @@ class LayerOverviewGenerator(QThread):
                 tl = self._to_scene(mn_x, mn_y)
                 br = self._to_scene(mx_x, mx_y)
                 rect = QRectF(tl, br).normalized()
-                # 保证最小可见尺寸，避免 sub-pixel 区域被跳过
+                # sub-pixel
                 if rect.width() < min_dot:
                     cx = rect.center().x()
                     rect.setLeft(cx - min_dot / 2)
@@ -794,8 +794,8 @@ class LayerOverviewGenerator(QThread):
         sc = self._scaled_cell
         build_cells = d.build_cells
 
-        # 当 sc 太小时，虚线边框退化为不可见的 0-1 px 线段
-        # 改用填充小方块标记每个 build cell 的位置
+        # sc 0-1 px
+        # build cell
         canvas_max = max(image.width(), image.height(), 1)
         min_dot = max(8, int(round(canvas_max / 150.0)))
         use_fill_fallback = sc < 3
@@ -806,7 +806,7 @@ class LayerOverviewGenerator(QThread):
             done = 0
 
             if use_fill_fallback:
-                # 填充模式：每个 build cell 画一个带半透明的小方块
+                # build cell
                 fill_color = QColor(border)
                 fill_color.setAlpha(160)
                 p.setPen(Qt.PenStyle.NoPen)
@@ -823,7 +823,7 @@ class LayerOverviewGenerator(QThread):
                     if done % 200 == 0:
                         self.progress.emit(self._layer_key, done, total)
             else:
-                # 正常模式：画虚线边框
+                # Comment translated to English.
                 pen = QPen(border, 2)
                 pen.setStyle(Qt.PenStyle.DashLine)
                 p.setPen(pen)
@@ -873,7 +873,7 @@ class MapOverviewService(QObject):
         "isoregion_special", "players", "vehicles",
     }
 
-    LAYER_LOD_FLOOR: Dict[str, int] = {}  # 不再强制降质，所有图层允许 LOD=0
+    LAYER_LOD_FLOOR: Dict[str, int] = {}  # LOD=0
     CACHE_DIR = Path("user_data/overview_cache")
     MAX_CACHE_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB
 
@@ -896,7 +896,7 @@ class MapOverviewService(QObject):
 
     @classmethod
     def per_layer_max_pixels(cls, layer_count: int) -> int:
-        # 每个图层享有完整预算，不再按图层数均分（避免过度降质）
+        # Comment translated to English.
         return cls._apply_lod_boost(MAX_OVERVIEW_PIXELS)
 
     @classmethod

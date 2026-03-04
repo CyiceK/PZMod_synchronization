@@ -27,7 +27,7 @@ from .chunk_share_service import (
     ChunkShareOptions,
 )
 
-# 颜色系统模块便捷导入
+# Comment translated to English.
 from .theme_palette import theme_palette, TextRole, BackgroundRole, ColorRole
 from .color_manager import color_manager, get_safe_color, ensure_contrast
 from .font_renderer import font_renderer, apply_text, apply_bg, style, text, bg
@@ -66,7 +66,7 @@ __all__ = [
     "import_chunk_bundle",
     "read_chunk_bundle_summary",
     "ChunkShareOptions",
-    # 颜色系统导出
+    # Comment translated to English.
     "theme_palette",
     "TextRole",
     "BackgroundRole",

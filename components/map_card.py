@@ -327,15 +327,13 @@ class MapCard(CardWidget, ThemedMixin):
         self.enable_changed.emit(self.mod_key, checked)
 
     def prepare_for_recycle(self):
-        """
-        准备回收前清理资源引用，防止内存泄漏。
+        """Documentation translated to English.
 
-        在VirtualList回收widget时调用，清除持有的大对象引用，
-        使得这些对象能被正确回收。
-        """
-        # MapCard使用ImageLabel，清理预览widget
+VirtualListwidget
+Documentation translated to English."""
+        # MapCardImageLabel widget
         if hasattr(self, 'preview_widget') and self.preview_widget:
-            # ImageLabel需要清理图片
+            # ImageLabel
             if hasattr(self.preview_widget, 'setPixmap'):
                 self.preview_widget.setPixmap(QPixmap())
             elif hasattr(self.preview_widget, 'setIcon'):

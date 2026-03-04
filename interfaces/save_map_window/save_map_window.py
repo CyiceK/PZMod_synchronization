@@ -252,7 +252,7 @@ class SaveMapWindow(
         self._overview_generating: Set[str] = set()        # layers currently generating
         self._overview_pending: Set[str] = set()
         self._overview_coord_key: Optional[tuple] = None  # coordinate params fingerprint
-        # 压缩存储：隐藏图层以 WebP bytes 保留，切换可见时解压恢复
+        # WebP bytes
         self._compressed_layers: Dict[str, Tuple[bytes, int, int, int]] = {}
         # layer_key -> (webp_bytes, width, height, lod_level)
         self._use_unit_grid = True
@@ -617,7 +617,7 @@ class SaveMapWindow(
         self._use_opengl = True
         # Raise QPixmapCache limit: default 10MB is too small for map tiles
         # (a single 2048x2048 ARGB pixmap is 16MB). 256MB prevents constant eviction.
-        # Overview 图层不使用 QPixmapCache（直接放 scene items），128 MB 对其余渲染足够
+        # Overview QPixmapCache scene items 128 MB
         QPixmapCache.setCacheLimit(128 * 1024)
         self._gl_viewport: Optional[QWidget] = None
         self._soft_viewport: Optional[QWidget] = None
@@ -685,7 +685,7 @@ class SaveMapWindow(
         self.setObjectName("save-map-window")
         self.setWindowTitle(tr("save.map.title", name=self.save_info.name))
         self.resize(980, 760)
-        # 关闭窗口时自动销毁，释放内存
+        # Comment translated to English.
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
         # Early build detection so _load_map_layer_transform() inside _init_ui()
@@ -1833,7 +1833,7 @@ class SaveMapWindow(
         self._chunk_content_timer.stop()
         self._close_child_dialogs()
 
-        # 清理加载线程（请求中断并等待片刻，避免QThread被提前销毁）
+        # QThread
         if self._load_thread is not None:
             try:
                 self._load_thread.finished.disconnect()
@@ -1843,7 +1843,7 @@ class SaveMapWindow(
             orphan_qthread(self._load_thread, timeout_ms=1500)
             self._load_thread = None
 
-        # 清理扫描线程
+        # Comment translated to English.
         self._cleanup_bin_scan_thread()
 
         if self._mod_fallback_connected:
@@ -1853,16 +1853,16 @@ class SaveMapWindow(
             except Exception:
                 pass
 
-        # 清理预合成服务
+        # Comment translated to English.
         if self._overview_service is not None:
             self._overview_service.cleanup()
             self._overview_service = None
         self._overview_images.clear()
         self._overview_lods.clear()
         self._overview_generating.clear()
-        self._compressed_layers.clear()  # 窗口关闭，释放所有压缩数据
+        self._compressed_layers.clear()  # Comment translated to English.
 
-        # 清理渲染线程
+        # Comment translated to English.
         for thread in list(self._layer_threads.values()):
             try:
                 thread.rendered.disconnect()
@@ -1872,12 +1872,12 @@ class SaveMapWindow(
             orphan_qthread(thread, timeout_ms=1200)
         self._layer_threads.clear()
 
-        # 清理图层数据
+        # Comment translated to English.
         self._release_layer_pixmaps()
         self._layer_items.clear()
         self._layer_groups.clear()
 
-        # 清理场景
+        # Comment translated to English.
         self.scene.clear()
         QPixmapCache.clear()
 
@@ -3604,7 +3604,7 @@ class SaveMapWindow(
             zombies_coord_mode=self._zpop_coord_mode,
             animals_coord_mode=self._apop_coord_mode,
             view_scale=getattr(self.view, '_scale', 1.0),  # ✓ FIX: Pass view zoom factor
-            # 禁用分层渲染，使用传统单通道渲染以避免图层丢失
+            # Comment translated to English.
             layer_types=[],
             base_layer_cached=False,
             viewport_rect=None,
@@ -3686,13 +3686,13 @@ class SaveMapWindow(
             for lk in list(self._overview_images.keys()):
                 img = self._overview_images.get(lk)
                 if isinstance(img, QImage) and not img.isNull():
-                    # 优先用内存中的 QImage 恢复
+                    # QImage
                     lod = self._overview_lods.get(lk, 0)
                     divisor = 2 ** lod
                     self._set_layer_pixmap(lk, img, (0, 0), scale=float(divisor))
                     restored.append(lk)
                 elif lk in self._compressed_layers:
-                    # QImage 已 drop，从压缩数据恢复
+                    # QImage drop
                     if self._decompress_layer_from_bytes(lk):
                         restored.append(lk)
             if restored:
@@ -4257,10 +4257,9 @@ class SaveMapWindow(
             ] if getattr(self, "_show_vehicles", False) else None,
         )
 
-    # ------ 图层压缩存储 (WebP in-memory) ------
+    # (WebP in-memory)
 
     def _compress_layer_to_bytes(self, layer_key: str, image: QImage) -> None:
-        """将 QImage 压缩为内存中的 WebP bytes，用于隐藏图层的低内存保留。"""
         from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
         if image is None or image.isNull():
             return
@@ -4288,7 +4287,6 @@ class SaveMapWindow(
         )
 
     def _decompress_layer_from_bytes(self, layer_key: str) -> bool:
-        """从压缩 bytes 恢复 QImage 并放入场景，返回是否成功。"""
         entry = self._compressed_layers.get(layer_key)
         if entry is None:
             return False
@@ -4302,8 +4300,8 @@ class SaveMapWindow(
             return False
         divisor = 2 ** lod
         self._set_layer_pixmap(layer_key, image, (0, 0), scale=float(divisor))
-        # 恢复 overview 元数据
-        self._overview_images[layer_key] = None  # 保持 key 存在，高性能模式下不保留 QImage
+        # overview
+        self._overview_images[layer_key] = None  # key QImage
         self._overview_lods[layer_key] = lod
         log_service.info(
             f"[overview-decompress] {layer_key} "
@@ -4312,13 +4310,13 @@ class SaveMapWindow(
         return True
 
     def _compress_layer_from_scene(self, layer_key: str) -> None:
-        """从场景 item 提取 QPixmap -> QImage -> 压缩存储。"""
+        """Extract scene pixmap, convert to QImage, and compress to bytes."""
         if layer_key in self._compressed_layers:
-            return  # 已有压缩数据
+            return  # Comment translated to English.
         items = self._layer_items.get(layer_key)
         if not items:
             return
-        # 对于单 tile 的图层直接提取
+        # tile
         try:
             pix = items[0].pixmap()
             if pix.isNull():
@@ -4328,7 +4326,7 @@ class SaveMapWindow(
         except Exception as exc:
             log_service.warning(f"[overview-compress] {layer_key} 场景提取失败: {exc}")
 
-    # ------ end 图层压缩存储 ------
+    # end
 
     def _on_layer_overview_ready(self, layer_key: str, lod: int, image: QImage) -> None:
         """Callback when a single layer pre-composition finishes."""
@@ -4355,7 +4353,7 @@ class SaveMapWindow(
         self._update_layer_visibility()
 
         if cfg.get(cfg.map_high_perf_render):
-            # 预压缩存储（为 reset/visibility toggle 做准备）
+            # reset/visibility toggle
             self._compress_layer_to_bytes(layer_key, image)
             if layer_key not in ("map", "mod_maps", "chunks"):
                 # Drop the stored QImage to reduce CPU memory; keep a placeholder key.
@@ -4457,7 +4455,7 @@ class SaveMapWindow(
             )
         self._overview_images.pop(layer_key, None)
         self._overview_lods.pop(layer_key, None)
-        self._compressed_layers.pop(layer_key, None)  # 图层失效，清除压缩数据
+        self._compressed_layers.pop(layer_key, None)  # Comment translated to English.
         if self._overview_service is not None:
             self._overview_service.invalidate_layer(layer_key)
             if regenerate:
@@ -4509,7 +4507,7 @@ class SaveMapWindow(
             self._overview_lods.clear()
             self._overview_generating.clear()
             self._overview_pending.clear()
-            self._compressed_layers.clear()  # 切换模式，释放所有压缩数据
+            self._compressed_layers.clear()  # Comment translated to English.
 
             # Source data may have been released — reload if needed
             if not self._map_tiles_dict and self._coords:
@@ -4602,7 +4600,7 @@ class SaveMapWindow(
 
         overlays = self._build_mod_overlay_payload()
 
-        # 修复：如果所有Mod都被隐藏，返回None清除图层
+        # Mod None
         if not overlays:
             self._clear_layer_items_soft("mod_maps")
             return None
@@ -5539,7 +5537,7 @@ class SaveMapWindow(
             if not visible:
                 if _high_perf and layer_key in self._overview_images:
                     group.setVisible(False)
-                    # 确保有压缩备份后释放 QPixmap 节省内存
+                    # QPixmap
                     if layer_key not in self._compressed_layers:
                         self._compress_layer_from_scene(layer_key)
                     self._clear_layer_items(layer_key, keep_items=True)
@@ -5571,7 +5569,7 @@ class SaveMapWindow(
                                 has_pixmap = True
                                 break
                     if not has_pixmap:
-                        # 优先从压缩数据恢复，避免重新生成
+                        # Comment translated to English.
                         if layer_key in self._compressed_layers:
                             self._decompress_layer_from_bytes(layer_key)
                         elif hasattr(self, "_mark_overview_layer_stale"):

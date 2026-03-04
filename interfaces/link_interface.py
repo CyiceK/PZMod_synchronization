@@ -120,7 +120,7 @@ class LinkInterface(BaseInterface):
     """Symlink management page."""
 
     def __init__(self, parent=None):
-        # 使用 blockSignals() 替代 _suppress_config 手动标志
+        # blockSignals() _suppress_config
         self._records = []
         self._size_worker = None
         super().__init__(tr("link.title"), "link-interface", parent)
@@ -293,7 +293,7 @@ class LinkInterface(BaseInterface):
 
     def _load_config(self):
         """Load config values into inputs using blockSignals."""
-        # 使用 blockSignals 替代手动标志
+        # blockSignals
         self.source_edit.blockSignals(True)
         self.source_edit.setText(cfg.get(cfg.link_source_path) or "")
         self.source_edit.blockSignals(False)
@@ -433,12 +433,12 @@ class LinkInterface(BaseInterface):
         return tr("link.status.not_link")
 
     def _on_source_changed(self, text: str):
-        # blockSignals 已阻止信号循环，无需手动检查
+        # blockSignals
         cfg.set(cfg.link_source_path, text.strip())
         self._update_preview()
 
     def _on_target_changed(self, text: str):
-        # blockSignals 已阻止信号循环，无需手动检查
+        # blockSignals
         cfg.set(cfg.link_target_path, text.strip())
         self._update_preview()
 

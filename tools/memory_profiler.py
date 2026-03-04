@@ -1,20 +1,18 @@
-"""
-内存泄漏分析工具 - 用于定位地图索引重建时的内存问题
+"""Documentation translated to English.
 
-使用方法:
-1. 基础内存快照对比:
-   python tools/memory_profiler.py snapshot
+Documentation translated to English.
+1
+python tools/memory_profiler.py snapshot
 
-2. 实时内存监控 (每秒输出):
-   python tools/memory_profiler.py monitor
+2. ()
+python tools/memory_profiler.py monitor
 
-3. 对象增长分析:
-   python tools/memory_profiler.py objgraph
+3
+python tools/memory_profiler.py objgraph
 
-4. 生成内存火焰图 (需要 memray):
-   python -m memray run -o output.bin your_script.py
-   python -m memray flamegraph output.bin
-"""
+4. ( memray)
+python -m memray run -o output.bin your_script.py
+python -m memray flamegraph output.bin"""
 from __future__ import annotations
 
 import gc
@@ -27,14 +25,13 @@ from typing import Dict, List, Optional, Tuple
 from collections import Counter
 from datetime import datetime
 
-# 添加项目根目录到 path
+# path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def format_size(size: int) -> str:
-    """格式化字节大小"""
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    """Documentation translated to English."""in ['B', 'KB', 'MB', 'GB']:
         if abs(size) < 1024:
             return f"{size:.1f} {unit}"
         size /= 1024
@@ -42,8 +39,7 @@ def format_size(size: int) -> str:
 
 
 def get_top_allocations(snapshot, limit: int = 20) -> List[str]:
-    """获取内存分配 Top N"""
-    top_stats = snapshot.statistics('lineno')
+    """Top N"""ts = snapshot.statistics('lineno')
     lines = []
     lines.append(f"\n{'='*80}")
     lines.append(f"Top {limit} 内存分配位置:")
@@ -54,7 +50,7 @@ def get_top_allocations(snapshot, limit: int = 20) -> List[str]:
         lines.append(f"\n#{index}: {format_size(stat.size)} ({stat.count} 次分配)")
         lines.append(f"    文件: {frame.filename}:{frame.lineno}")
 
-        # 尝试读取源代码行
+        # Comment translated to English.
         try:
             line = linecache.getline(frame.filename, frame.lineno).strip()
             if line:
@@ -66,8 +62,7 @@ def get_top_allocations(snapshot, limit: int = 20) -> List[str]:
 
 
 def get_top_traceback(snapshot, limit: int = 10) -> List[str]:
-    """获取完整调用栈的内存分配 Top N"""
-    top_stats = snapshot.statistics('traceback')
+    """Top N"""t.statistics('traceback')
     lines = []
     lines.append(f"\n{'='*80}")
     lines.append(f"Top {limit} 内存分配调用栈:")
@@ -75,7 +70,7 @@ def get_top_traceback(snapshot, limit: int = 10) -> List[str]:
 
     for index, stat in enumerate(top_stats[:limit], 1):
         lines.append(f"\n#{index}: {format_size(stat.size)} ({stat.count} 次分配)")
-        for frame in stat.traceback[:8]:  # 最多显示 8 层调用栈
+        for frame in stat.traceback[:8]:  # 8
             lines.append(f"    {frame.filename}:{frame.lineno}")
             try:
                 line = linecache.getline(frame.filename, frame.lineno).strip()
@@ -88,8 +83,7 @@ def get_top_traceback(snapshot, limit: int = 10) -> List[str]:
 
 
 def compare_snapshots(snapshot1, snapshot2, limit: int = 20) -> List[str]:
-    """对比两个快照，找出内存增长"""
-    top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+    """Documentation translated to English.""".compare_to(snapshot1, 'lineno')
     lines = []
     lines.append(f"\n{'='*80}")
     lines.append(f"内存增长 Top {limit} (新增分配):")
@@ -113,10 +107,7 @@ def compare_snapshots(snapshot1, snapshot2, limit: int = 20) -> List[str]:
 
 
 def analyze_object_types() -> List[str]:
-    """分析当前内存中的对象类型"""
-    gc.collect()
-
-    type_counts: Counter = Counter()
+    """Documentation translated to English."""ype_counts: Counter = Counter()
     type_sizes: Dict[str, int] = {}
 
     for obj in gc.get_objects():
@@ -150,8 +141,7 @@ def analyze_object_types() -> List[str]:
 
 
 def find_large_objects(min_size_mb: float = 1.0) -> List[str]:
-    """查找大对象"""
-    gc.collect()
+    """Documentation translated to English."""llect()
     min_size = int(min_size_mb * 1024 * 1024)
 
     large_objects = []
@@ -181,19 +171,16 @@ def find_large_objects(min_size_mb: float = 1.0) -> List[str]:
 
 
 def find_growing_dicts_and_lists() -> List[str]:
-    """查找可能泄漏的大字典和列表"""
-    gc.collect()
-
-    large_containers = []
+    """Documentation translated to English."""ge_containers = []
 
     for obj in gc.get_objects():
         try:
             if isinstance(obj, dict) and len(obj) > 1000:
-                # 获取字典的一些键作为预览
+                # Comment translated to English.
                 keys = list(obj.keys())[:5]
                 large_containers.append(('dict', len(obj), sys.getsizeof(obj), str(keys)[:80]))
             elif isinstance(obj, (list, tuple)) and len(obj) > 1000:
-                # 获取列表的一些元素类型
+                # Comment translated to English.
                 elem_types = set(type(x).__name__ for x in list(obj)[:10])
                 large_containers.append((type(obj).__name__, len(obj), sys.getsizeof(obj), str(elem_types)))
             elif isinstance(obj, set) and len(obj) > 1000:
@@ -220,16 +207,12 @@ def find_growing_dicts_and_lists() -> List[str]:
 
 
 class MemoryTracker:
-    """内存追踪器 - 用于在代码中插入检查点"""
-
-    def __init__(self):
-        self.snapshots: List[Tuple[str, tracemalloc.Snapshot]] = []
-        tracemalloc.start(25)  # 保留 25 帧调用栈
+    """Documentation translated to English."""  self.snapshots: List[Tuple[str, tracemalloc.Snapshot]] = []
+        tracemalloc.start(25)  # 25
         print("[MemoryTracker] 启动内存追踪")
 
     def checkpoint(self, name: str) -> None:
-        """创建检查点"""
-        gc.collect()
+        """Documentation translated to English."""c.collect()
         snapshot = tracemalloc.take_snapshot()
         self.snapshots.append((name, snapshot))
 
@@ -237,15 +220,14 @@ class MemoryTracker:
         print(f"[MemoryTracker] 检查点 '{name}': 当前={format_size(current)}, 峰值={format_size(peak)}")
 
     def report(self) -> str:
-        """生成报告"""
-        lines = []
+        """Documentation translated to English.""" lines = []
         lines.append(f"\n{'#'*80}")
         lines.append(f"# 内存追踪报告")
         lines.append(f"# 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append(f"{'#'*80}")
 
         if len(self.snapshots) >= 2:
-            # 对比第一个和最后一个快照
+            # Comment translated to English.
             first_name, first_snap = self.snapshots[0]
             last_name, last_snap = self.snapshots[-1]
 
@@ -253,13 +235,13 @@ class MemoryTracker:
             lines.extend(compare_snapshots(first_snap, last_snap, limit=30))
 
         if self.snapshots:
-            # 最后一个快照的详细信息
+            # Comment translated to English.
             last_name, last_snap = self.snapshots[-1]
             lines.append(f"\n最终状态 '{last_name}' 的内存分配:")
             lines.extend(get_top_allocations(last_snap, limit=30))
             lines.extend(get_top_traceback(last_snap, limit=15))
 
-        # 对象分析
+        # Comment translated to English.
         lines.extend(analyze_object_types())
         lines.extend(find_growing_dicts_and_lists())
         lines.extend(find_large_objects(min_size_mb=1.0))
@@ -267,8 +249,7 @@ class MemoryTracker:
         return '\n'.join(lines)
 
     def save_report(self, path: Optional[Path] = None) -> Path:
-        """保存报告到文件"""
-        if path is None:
+        """Documentation translated to English."""th is None:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             path = PROJECT_ROOT / 'logs' / f'memory_report_{timestamp}.txt'
 
@@ -279,14 +260,12 @@ class MemoryTracker:
         return path
 
     def stop(self) -> None:
-        """停止追踪"""
-        tracemalloc.stop()
+        """Documentation translated to English.""" tracemalloc.stop()
         print("[MemoryTracker] 停止内存追踪")
 
 
 def run_with_tracking(func, *args, **kwargs):
-    """运行函数并追踪内存"""
-    tracker = MemoryTracker()
+    """Documentation translated to English."""oryTracker()
     tracker.checkpoint("开始")
 
     try:
@@ -299,24 +278,22 @@ def run_with_tracking(func, *args, **kwargs):
 
 
 # ============================================================================
-# 针对地图索引重建的专用分析
+# Comment translated to English.
 # ============================================================================
 
 def profile_map_index_rebuild():
-    """分析地图索引重建的内存使用"""
-    print("=" * 80)
-    print("地图索引重建内存分析")
+    """Documentation translated to English."""rint("地图索引重建内存分析")
     print("=" * 80)
 
     tracker = MemoryTracker()
     tracker.checkpoint("初始化前")
 
-    # 导入必要模块
+    # Comment translated to English.
     from utils.save_map_window_utils import MapBinScanThread
     tracker.checkpoint("导入模块后")
 
-    # 这里需要一个实际的存档路径来测试
-    # 可以通过命令行参数传入
+    # Comment translated to English.
+    # Comment translated to English.
     if len(sys.argv) > 2:
         save_path = Path(sys.argv[2])
         if save_path.exists():
@@ -324,12 +301,12 @@ def profile_map_index_rebuild():
 
             tracker.checkpoint("扫描前")
 
-            # 执行扫描
+            # Comment translated to English.
             result = MapBinScanThread._scan_bins(save_path)
 
             tracker.checkpoint("扫描后")
 
-            # 清理
+            # Comment translated to English.
             del result
             gc.collect()
 
@@ -343,8 +320,7 @@ def profile_map_index_rebuild():
 
 
 def realtime_monitor(interval: float = 1.0):
-    """实时监控内存使用"""
-    import psutil
+    """Documentation translated to English."""il
 
     process = psutil.Process()
     print("实时内存监控 (Ctrl+C 停止)")
@@ -379,7 +355,7 @@ def main():
     command = sys.argv[1]
 
     if command == "snapshot":
-        # 基础快照分析
+        # Comment translated to English.
         tracemalloc.start(25)
         gc.collect()
         snapshot = tracemalloc.take_snapshot()

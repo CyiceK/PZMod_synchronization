@@ -26,9 +26,9 @@ from services.parse_debug_log import log_parse_exception
 _CACHE: Dict[Tuple[str, str], Tuple[Dict[str, str], Dict[str, str]]] = {}
 
 # Disk cache path
-_DISK_CACHE_VERSION = 2  # 升级到v2: 使用MD5签名
+_DISK_CACHE_VERSION = 2  # v2: MD5
 
-# 支持的编码列表
+# Comment translated to English.
 _ENCODINGS = ["utf-8", "gbk", "latin-1"]
 
 
@@ -39,7 +39,6 @@ def _disk_cache_path() -> Path:
 
 
 def _overrides_dir() -> Path:
-    """获取覆盖文件目录"""
     override_dir = Path(__file__).resolve().parents[1] / "resources" / "i18n" / "overrides"
     override_dir.mkdir(parents=True, exist_ok=True)
     return override_dir
@@ -102,11 +101,9 @@ def _translate_single(
 
 
 def _load_translation_maps() -> Tuple[Dict[str, str], Dict[str, str]]:
-    """
-    加载翻译映射（修改版）。
-    
-    优先使用新架构，回退到现有逻辑。
-    """
+    """Documentation translated to English.
+
+Documentation translated to English."""
     game_path = cfg.get(cfg.game_path)
     if not game_path:
         return {}, {}
@@ -118,16 +115,16 @@ def _load_translation_maps() -> Tuple[Dict[str, str], Dict[str, str]]:
     if cached:
         return cached
 
-    # 尝试从新架构加载 JSON 翻译
+    # JSON
     locale = "zh_CN" if lang_dir == "CN" else "en_US"
     game_items_data = _try_load_from_new_architecture(locale)
     
     if game_items_data:
-        # 使用新架构的数据
+        # Comment translated to English.
         item_map = game_items_data.get("translations", {})
-        media_map = {}  # 媒体翻译单独加载
+        media_map = {}  # Comment translated to English.
         
-        # 应用覆盖
+        # Comment translated to English.
         overrides = _load_overrides(lang_dir)
         if overrides:
             item_map = _apply_overrides(item_map, overrides)
@@ -140,7 +137,7 @@ def _load_translation_maps() -> Tuple[Dict[str, str], Dict[str, str]]:
         )
         return item_map, media_map
     
-    # 回退到现有逻辑（从游戏文件解析）
+    # Comment translated to English.
     # Compute source file paths
     root = Path(game_path) / "media" / "lua" / "shared" / "Translate" / lang_dir
     item_path = root / f"ItemName_{lang_dir}.txt"
@@ -166,7 +163,7 @@ def _load_translation_maps() -> Tuple[Dict[str, str], Dict[str, str]]:
         item_map = _parse_item_name_file(item_path)
         media_map = _parse_recorded_media_file(media_path)
 
-    # 应用覆盖翻译
+    # Comment translated to English.
     overrides = _load_overrides(lang_dir)
     if overrides:
         item_map = _apply_overrides(item_map, overrides)
@@ -187,20 +184,18 @@ def _load_translation_maps() -> Tuple[Dict[str, str], Dict[str, str]]:
 
 
 def _try_load_from_new_architecture(locale: str) -> Optional[Dict[str, str]]:
-    """
-    尝试从新架构加载 JSON 翻译。
-    
-    Args:
-        locale: 语言代码 (zh_CN/en_US)
-        
-    Returns:
-        翻译数据字典或 None
-    """
+    """JSON
+
+Args
+locale: (zh_CN/en_US)
+
+Returns
+None"""
     try:
-        # 确保翻译服务已加载
+        # Comment translated to English.
         translation_service.load_category("game_items", locale)
         
-        # 获取缓存数据
+        # Comment translated to English.
         cache_key = f"game_items:{locale}"
         data = translation_service._cache_l1.get(cache_key)
         
@@ -216,13 +211,11 @@ def _try_load_from_new_architecture(locale: str) -> Optional[Dict[str, str]]:
 
 
 def _detect_encoding(file_path: Path) -> str | None:
-    """
-    自动检测文件编码。
-    尝试顺序：UTF-8 -> GBK -> Latin-1
-    
-    Returns:
-        检测到的编码，如果全部失败则返回None
-    """
+    """Documentation translated to English.
+UTF-8 -> GBK -> Latin-1
+
+Returns
+None"""
     if not file_path.exists():
         return None
     
@@ -252,14 +245,12 @@ def _detect_encoding(file_path: Path) -> str | None:
 
 
 def _load_overrides(lang: str) -> Dict[str, str]:
-    """
-    加载用户自定义翻译覆盖文件。
-    
-    覆盖文件路径: resources/i18n/overrides/item_overrides_{lang}.json
-    
-    Returns:
-        覆盖映射字典，格式为 {item_id: translated_name}
-    """
+    """Documentation translated to English.
+
+resources/i18n/overrides/item_overrides_{lang}.json
+
+Returns
+{item_id: translated_name}"""
     overrides_dir = _overrides_dir()
     override_file = overrides_dir / f"item_overrides_{lang}.json"
     
@@ -297,16 +288,14 @@ def _apply_overrides(
     item_map: Dict[str, str],
     overrides: Dict[str, str],
 ) -> Dict[str, str]:
-    """
-    将覆盖翻译应用到原始翻译映射中。
-    
-    Args:
-        item_map: 原始物品翻译映射
-        overrides: 覆盖翻译映射
-    
-    Returns:
-        应用覆盖后的新映射（创建副本，不修改原映射）
-    """
+    """Documentation translated to English.
+
+Args
+item_map
+overrides
+
+Returns
+Documentation translated to English."""
     result = dict(item_map)
     for item_id, translated_name in overrides.items():
         if item_id in result:
@@ -326,12 +315,10 @@ def _apply_overrides(
 
 
 def _compute_md5_signature(file_path: Path) -> Dict[str, object]:
-    """
-    计算文件的MD5哈希签名。
-    
-    Returns:
-        包含MD5哈希和文件大小信息的字典
-    """
+    """MD5
+
+Returns
+MD5"""
     if not file_path.exists():
         return {}
     
@@ -376,7 +363,7 @@ def _load_disk_cache(
     if data.get("lang_dir") != lang_dir:
         return None
 
-    # Phase 4: 使用MD5签名验证
+    # Phase 4: MD5
     sigs = data.get("signatures", {})
     item_sig = sigs.get("item_name", {})
     media_sig = sigs.get("recorded_media", {})
@@ -397,7 +384,6 @@ def _load_disk_cache(
 
 
 def _validate_md5_signature(file_path: Path, cached_sig: Dict[str, object]) -> bool:
-    """验证文件的MD5签名是否匹配缓存的签名。"""
     if not cached_sig:
         return False
     
@@ -461,10 +447,10 @@ def _parse_kv_file(path: Path, *, key_prefix: str) -> Dict[str, str]:
     if not path.exists():
         return {}
     
-    # Phase 4: 使用编码自动检测
+    # Phase 4
     encoding = _detect_encoding(path)
     if encoding is None:
-        encoding = "utf-8"  # 回退到UTF-8
+        encoding = "utf-8"  # UTF-8
     
     try:
         content = path.read_text(encoding=encoding, errors="replace")

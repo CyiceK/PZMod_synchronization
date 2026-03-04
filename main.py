@@ -8,11 +8,11 @@ import os
 import sys
 import multiprocessing
 
-# ── PyCharm Run-mode 兼容 ─────────────────────────────────────────
-# PyCharm 的 Run（非 Debug）模式仍会通过 pydevd 注入 --qt-support=auto，
-# 其 frame-eval 钩子和 Qt 事件循环 monkey-patch 会导致 QStackedWidget /
-# setStyleSheet 等 C++ 操作触发 access violation (0xC0000005).
-# 在 **任何 Qt 导入之前** 禁用这些钩子即可规避。
+# ── PyCharm Run-mode ─────────────────────────────────────────
+# PyCharm Run Debug pydevd --qt-support=auto
+# frame-eval Qt monkey-patch QStackedWidget /
+# setStyleSheet C++ access violation (0xC0000005)
+# ** Qt **
 _PYCHARM_RUN = os.environ.get("PYCHARM_HOSTED") == "1"
 if _PYCHARM_RUN:
     os.environ.setdefault("PYDEVD_USE_FRAME_EVAL", "NO")
@@ -44,12 +44,17 @@ from config import cfg, Language, apply_document_path_defaults, get_config_statu
 from services.i18n import i18n
 from services.log_service import get_logger
 
-# 获取全局logger（新的 AdvancedLogService 会自动初始化）
+# logger AdvancedLogService
 logger = get_logger(__name__)
 
 
 def _debug(message: str):
-    """调试输出函数（保留用于兼容性）"""
+    """Emit startup debug logs only when debug mode is enabled."""
+    try:
+        if not bool(cfg.get(cfg.enable_debug)):
+            return
+    except Exception:
+        return
     logger.debug(message)
 
 
@@ -213,8 +218,8 @@ def main():
     window = MainWindow()
     _debug("MainWindow constructed")
 
-    # 延迟显示窗口 100ms，确保 Qt 内部窗口句柄完全创建
-    # 防止在窗口完全初始化前焦点变化事件导致的空指针解引用
+    # 100ms Qt
+    # Comment translated to English.
     from PyQt6.QtCore import QTimer
     QTimer.singleShot(100, window.show)
 

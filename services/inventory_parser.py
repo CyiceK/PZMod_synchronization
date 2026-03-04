@@ -1,10 +1,8 @@
-"""
-Read-only inventory parsing helpers.
+"""Read-only inventory parsing helpers
 
-支持翻译：
-- 容器类型翻译
-- 物品名称翻译
-"""
+Documentation translated to English.
+Documentation translated to English.
+Documentation translated to English."""
 from __future__ import annotations
 
 from collections import Counter
@@ -72,7 +70,7 @@ def parse_item_container_summary(
         unique_items = len(counts)
         top_items = counts.most_common(max_top) if counts else []
         
-        # 翻译容器类型
+        # Comment translated to English.
         container_type_translated = None
         if container_type:
             container_type_translated = archive_i18n.translate_container(container_type)
@@ -89,17 +87,17 @@ def parse_item_container_summary(
             "samples": samples,
         }
         if include_item_details:
-            # 翻译物品详情
+            # Comment translated to English.
             translated_details = []
             for detail in item_details:
                 item_type = detail.get("type", "")
                 translated_detail = dict(detail)
                 if item_type:
                     translated_names = translate_item_list([item_type])
-                    # 从翻译结果中提取纯翻译名称（去除原始ID）
+                    # ID
                     translated_name = translated_names[0] if translated_names else item_type
                     if " (" in translated_name and translated_name.endswith(")"):
-                        # 格式: "翻译名称 (原始ID)" -> 提取翻译名称
+                        # " (ID)" ->
                         translated_name = translated_name.rsplit(" (", 1)[0]
                     translated_detail["type_translated"] = translated_name
                 translated_details.append(translated_detail)

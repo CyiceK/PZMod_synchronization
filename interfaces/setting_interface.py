@@ -387,7 +387,7 @@ class SettingInterface(ScrollArea):
 
         # GitHub link
         self.github_card = HyperlinkCard(
-            "https://github.com",
+            "https://github.com/CyiceK/PZMod_synchronization",
             tr("settings.about.github.button"),
             FluentIcon.GITHUB,
             tr("settings.about.github.title"),

@@ -26,6 +26,7 @@ from interfaces.log_interface import LogInterface
 from interfaces.debug_log_interface import DebugLogInterface
 from interfaces.setting_interface import SettingInterface
 from interfaces.link_interface import LinkInterface
+from interfaces.about_interface import AboutInterface
 
 # Import services.
 from services.notification import notification
@@ -79,13 +80,13 @@ class MainWindow(FluentWindow):
         qconfig.themeColorChanged.connect(lambda *_: self._apply_theme_accent())
         cfg.theme_color.valueChanged.connect(lambda *_: self._apply_theme_accent())
 
-        # 设置透明背景 (必须在 _init_navigation 之后，所有 interface 已被
-        # addSubInterface 注册到 stacked widget，此时 widget 层次完整可安全操作样式)
+        # ( _init_navigation interface
+        # addSubInterface stacked widget widget )
         self._apply_transparent_backgrounds()
 
-        # ── 启动 UI 日志轮询 ──────────────────────────────────────
-        # 必须在所有 addSubInterface 完成后才启动 QTimer,
-        # 否则 QTimer 回调会在 addWidget 的 processEvents 中触发
+        # ── UI ──────────────────────────────────────
+        # addSubInterface QTimer
+        # QTimer addWidget processEvents
         # log_added → LogInterface._on_log_added → insertRow → 💥
         log_service.start_ui_updates()
 
@@ -99,13 +100,12 @@ class MainWindow(FluentWindow):
         log_service.info("PZMod Synchronization 已启动", "MainWindow")
 
     def _apply_transparent_backgrounds(self):
-        """设置所有 interface 的透明背景.
+        """interface
 
-        必须在 _init_navigation() 之后调用 —— interface 必须先通过
-        addSubInterface 注册到 FluentWindow 的 stacked widget，
-        否则在 widget 未完全挂载时调用 setStyleSheet 会导致
-        C++ access violation (0xC0000005).
-        """
+_init_navigation() —— interface
+addSubInterface FluentWindow stacked widget
+widget setStyleSheet
+C++ access violation (0xC0000005)"""
         for iface in [
             self.home_interface,
             self.mod_interface,
@@ -115,6 +115,7 @@ class MainWindow(FluentWindow):
             self.link_interface,
             self.log_interface,
             self.debug_log_interface,
+            self.about_interface,
             self.setting_interface,
         ]:
             if hasattr(iface, "enableTransparentBackground"):
@@ -146,11 +147,12 @@ class MainWindow(FluentWindow):
         self.link_interface = LinkInterface(self)
         self.log_interface = LogInterface(self)
         self.debug_log_interface = DebugLogInterface(self)
+        self.about_interface = AboutInterface(self)
         self.setting_interface = SettingInterface(self)
 
-        # NOTE: enableTransparentBackground() 移至 __init__ 末尾调用
-        # (在 _init_navigation / _init_window 之后)，避免在 addSubInterface
-        # 过程中 stylesheet 修改触发 access violation.
+        # NOTE: enableTransparentBackground() __init__
+        # ( _init_navigation / _init_window ) addSubInterface
+        # stylesheet access violation
 
     def _init_navigation(self):
         """Initialize sidebar navigation."""
@@ -160,42 +162,42 @@ class MainWindow(FluentWindow):
         self.addSubInterface(
             self.home_interface,
             FluentIcon.HOME,
-            "首页",
+            tr("nav.home"),
             position=NavigationItemPosition.TOP
         )
 
         self.addSubInterface(
             self.mod_interface,
             FluentIcon.GAME,
-            "MOD 管理",
+            tr("nav.mods"),
             position=NavigationItemPosition.TOP
         )
 
         self.addSubInterface(
             self.server_interface,
             FluentIcon.CONNECT,
-            "服务器同步",
+            tr("nav.server"),
             position=NavigationItemPosition.TOP
         )
 
         self.addSubInterface(
             self.save_interface,
             FluentIcon.SAVE,
-            "存档管理",
+            tr("nav.saves"),
             position=NavigationItemPosition.TOP
         )
 
         self.addSubInterface(
             self.map_interface,
             map_icon,
-            "地图管理",
+            tr("nav.maps"),
             position=NavigationItemPosition.TOP
         )
 
         self.addSubInterface(
             self.link_interface,
             FluentIcon.LINK,
-            "软链接",
+            tr("nav.link"),
             position=NavigationItemPosition.TOP
         )
 
@@ -206,14 +208,21 @@ class MainWindow(FluentWindow):
         self.addSubInterface(
             self.log_interface,
             FluentIcon.HISTORY,
-            "日志",
+            tr("nav.logs"),
             position=NavigationItemPosition.SCROLL
         )
 
         self.addSubInterface(
             self.debug_log_interface,
             FluentIcon.SEARCH,
-            "日志分析",
+            tr("nav.debug_log"),
+            position=NavigationItemPosition.SCROLL
+        )
+
+        self.addSubInterface(
+            self.about_interface,
+            FluentIcon.INFO,
+            tr("nav.about"),
             position=NavigationItemPosition.SCROLL
         )
 
@@ -221,13 +230,13 @@ class MainWindow(FluentWindow):
         self.addSubInterface(
             self.setting_interface,
             FluentIcon.SETTING,
-            "设置",
+            tr("nav.settings"),
             position=NavigationItemPosition.BOTTOM
         )
 
-        # 设置初始页面 - 防止焦点竞争导致的崩溃
-        # QFluentWidgets 要求调用 switchTo() 设置初始页面
-        # 否则在窗口初始化期间点击其他窗口会触发访问冲突 (0xC0000005)
+        # Comment translated to English.
+        # QFluentWidgets switchTo()
+        # (0xC0000005)
         self.switchTo(self.home_interface)
 
     def _init_window(self):
@@ -332,7 +341,10 @@ class MainWindow(FluentWindow):
             self.server_interface,
             self.save_interface,
             self.map_interface,
+            self.link_interface,
             self.log_interface,
+            self.debug_log_interface,
+            self.about_interface,
             self.setting_interface
         ]:
             pivot = getattr(interface, "pivot", None)
@@ -386,6 +398,7 @@ class MainWindow(FluentWindow):
             self.link_interface,
             self.log_interface,
             self.debug_log_interface,
+            self.about_interface,
             self.setting_interface
         ]:
             if hasattr(interface, "update_texts"):
@@ -406,6 +419,7 @@ class MainWindow(FluentWindow):
             self.link_interface: tr("nav.link"),
             self.log_interface: tr("nav.logs"),
             self.debug_log_interface: tr("nav.debug_log"),
+            self.about_interface: tr("nav.about"),
             self.setting_interface: tr("nav.settings"),
         }
 

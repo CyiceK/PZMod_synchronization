@@ -114,7 +114,7 @@ class MapDataMixin:
 
     def _collect_mod_map_entries(self) -> List[SaveModMapEntry]:
         """Collect mod map entries from already-collected ``_maps``."""
-        # 保留现有的 hidden 状态，避免配置切换时重置用户的显示偏好
+        # hidden
         existing_hidden = {
             self._normalize_mod_id(entry.mod_id): entry.hidden
             for entry in getattr(self, '_mod_map_entries', [])
@@ -717,7 +717,7 @@ class MapDataMixin:
                 worldmap_png = map_dir / "worldmap.png"
                 if worldmap_png.exists():
                     thumb_path = worldmap_png
-            # Priority 3: 内置缩略图回退
+            # Priority 3
             if thumb_path is None:
                 try:
                     from services.bundled_tile_service import BundledTileService
@@ -967,10 +967,10 @@ class MapDataMixin:
             if image.isNull():
                 continue
             min_cell_x, max_cell_x, min_cell_y, max_cell_y = entry.bounds
-            # ── bundled thumb 边界修正 ──
-            # entry.bounds 是 cell_bounds（游戏世界完整范围），可能大于
-            # tile_set 实际覆盖范围。对 bundled thumb 使用 tile_set bounds
-            # 来避免图片被错误拉伸。
+            # ── bundled thumb ──
+            # entry.bounds cell_bounds
+            # tile_set bundled thumb tile_set bounds
+            # Comment translated to English.
             bundled_tb = getattr(self, '_bundled_tile_bounds', None)
             bundled_root = getattr(self, '_game_tiles_root_path', None)
             if bundled_tb is not None and bundled_root is not None:
@@ -1402,8 +1402,8 @@ class MapDataMixin:
         game_roots = self._iter_game_roots()
         game_dir = game_roots[0] if game_roots else None
 
-        # Priority 1: 版本感知的内置贴图回退
-        # 当存档版本 != 游戏目录版本时，使用对应版本的预渲染贴图
+        # Priority 1
+        # !=
         try:
             from services.bundled_tile_service import BundledTileService
             svc = BundledTileService.instance()
@@ -1414,7 +1414,7 @@ class MapDataMixin:
                 if tiles_root is not None:
                     self._tile_origin = svc.get_tile_origin(build_key)
                     self._game_tiles_root_path = tiles_root
-                    # 存储 tile_set 的 bounds 供 thumb 定位使用
+                    # tile_set bounds thumb
                     ts = svc.get_tile_set_for_build(build_key)
                     if ts:
                         b = ts.get("bounds", {})
@@ -1436,7 +1436,7 @@ class MapDataMixin:
         except Exception:
             pass
 
-        # Priority 2: 真实游戏目录 (版本匹配或无法判断时)
+        # Priority 2: ()
         self._tile_origin = (0, 0)
         self._game_tiles_root_path = None
         self._bundled_tile_bounds = None

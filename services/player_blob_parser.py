@@ -1,12 +1,10 @@
-"""
-Player BLOB parser (read-only, best-effort).
+"""Player BLOB parser (read-only, best-effort)
 
-支持翻译：
-- 职业名称翻译
-- 特性名称翻译
-- 身体部位翻译
-- 技能名称翻译
-"""
+Documentation translated to English.
+Documentation translated to English.
+Documentation translated to English.
+Documentation translated to English.
+Documentation translated to English."""
 from __future__ import annotations
 
 import math
@@ -584,7 +582,7 @@ def _read_body_damage_summary_legacy(
     has_nonzero_health = False
     invalid_health = False
     
-    # 身体部位 ID 列表（按顺序）
+    # ID
     body_part_ids = [
         "Head", "Neck", "Torso_Upper", "Torso_Lower",
         "UpperArm_L", "UpperArm_R", "ForeArm_L", "ForeArm_R",
@@ -3235,12 +3233,12 @@ def _read_iso_player_summary(
             for _ in range(worn_count):
                 stage = "worn_item_name"
                 if world_version >= 228:
-                    # B42: ResourceLocation格式 (namespace:path)
+                    # B42: ResourceLocation (namespace:path)
                     namespace = read_string(reader)
                     path = read_string(reader)
                     item_name = f"{namespace}:{path}"
                 else:
-                    # B41: 直接字符串格式
+                    # B41
                     item_name = read_string(reader)
                 stage = "worn_item_id"
                 item_id = reader.read_i16()

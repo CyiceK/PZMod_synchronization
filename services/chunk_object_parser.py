@@ -410,14 +410,12 @@ def scan_chunk_object_summary(
     use_cache: bool = True,
     enable_parallel: bool = True,
 ) -> Dict[str, object]:
-    """
-    扫描区块对象摘要。
+    """Documentation translated to English.
 
-    Phase 1.3: 移除 preloaded_data 参数，依赖 ChunkObjectCache 缓存机制。
-    - 首次解析从磁盘读取
-    - 后续请求命中缓存
-    - 内存使用受 max_memory_entries 控制
-    """
+Phase 1.3: preloaded_data ChunkObjectCache
+Documentation translated to English.
+Documentation translated to English.
+max_memory_entries"""
     if not chunk_paths:
         return {}
     global _ACTIVE_BUILD
@@ -472,7 +470,7 @@ def scan_chunk_object_summary(
                     break
 
             # Process cache misses in parallel (Phase 2.2 optimization)
-            # Phase 1.3: 移除 preloaded_data 参数，直接从磁盘读取
+            # Phase 1.3: preloaded_data
             if cache_misses and objects_total < max_objects:
                 executor = get_save_scan_executor()
                 futures = {
@@ -482,7 +480,7 @@ def scan_chunk_object_summary(
                         save_path,
                         dictionary,
                         max_objects - objects_total,
-                        None,  # 不再使用预加载数据，由 ChunkObjectCache 管理
+                        None,  # ChunkObjectCache
                     ): path
                     for path in cache_misses
                 }
@@ -574,7 +572,7 @@ def scan_chunk_object_summary(
                             break
                         continue
 
-                # Cache miss - Phase 1.3: 直接从磁盘读取，由 ChunkObjectCache 管理内存
+                # Cache miss - Phase 1.3: ChunkObjectCache
                 try:
                     data = path.read_bytes()
                 except Exception as exc:
@@ -2037,12 +2035,11 @@ def _read_tile_z_flags(
 
 
 def _use_b42_object_header() -> bool:
-    """判断是否使用B42对象头部格式。
-    
-    该判断仅基于 detect_build_version() 的全局构建版本检测结果，
-    不依赖具体的 world_version 参数，因为B41/B42的对象头格式差异
-    是全局性的架构变更，而非单个存档版本差异。
-    """
+    """B42
+
+detect_build_version()
+world_version B41/B42
+Documentation translated to English."""
     return _is_b42_build()
 
 
@@ -2716,12 +2713,10 @@ def _skip_unknown_object(
     world_items: Counter,
     class_id: int = -1,
 ) -> bool:
-    """
-    尝试用多种基类方式跳过未知对象。
-    
-    返回 True 表示成功跳过，False 表示所有 fallback 都失败。
-    调用者需要处理返回 False 的情况（如触发 resync）。
-    """
+    """Documentation translated to English.
+
+True False fallback
+False resync"""
     start = reader.tell()
     attempts: list[tuple[str, callable]] = [
         ("isoobject_base", lambda: _skip_isoobject_base(reader, world_version, debug_mode, dictionary, world_items)),
@@ -2776,10 +2771,8 @@ def _skip_minimal_isoobject(
     reader: ByteBufferReader,
     world_version: int,
 ) -> None:
-    """
-    最小化的 IsoObject 跳过逻辑。
-    只读取最基本的字段，用于极端情况下的 fallback。
-    """
+    """IsoObject
+fallback"""
     # Try to read minimal header that most objects have
     # sprite id (4 bytes)
     reader.read_i32()

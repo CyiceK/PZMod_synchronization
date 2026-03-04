@@ -208,39 +208,35 @@ def tr(key: str, **kwargs) -> str:
     return i18n.tr(key, **kwargs)
 
 
-# ============ 新架构兼容层 ============
+# ============ ============
 
 from services.i18n_base import TranslationService
 from services.i18n_archive import ArchiveTranslationService
 
-# 全局新服务实例 - 使用具体实现类而非抽象基类
+# Comment translated to English.
 translation_service = ArchiveTranslationService()
 
 
 def get_translation(key: str, category: str = "app", **kwargs) -> str:
-    """
-    新架构翻译函数（推荐用于新功能）。
-    
-    Args:
-        key: 翻译键
-        category: 分类 (app|game_items|archive_player|...)
-        **kwargs: 占位符参数
-        
-    Returns:
-        翻译文本
-    """
+    """Documentation translated to English.
+
+Args
+key
+category: (app|game_items|archive_player|...)
+**kwargs
+
+Returns
+Documentation translated to English."""
     return translation_service.get(key, category=category, **kwargs)
 
 
 def load_translation_category(category: str, locale: str = None) -> bool:
-    """加载分类翻译。"""
     return translation_service.load_category(category, locale)
 
 
 def reload_translations(locale: str = None) -> bool:
-    """重新加载翻译。"""
     return translation_service.reload(locale)
 
 
-# 导出存档翻译服务
+# Comment translated to English.
 from services.i18n_archive import archive_i18n

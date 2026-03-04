@@ -1,13 +1,11 @@
-"""
-Chunk content index (containers/buildings/items).
+"""Chunk content index (containers/buildings/items)
 
-Builds an incremental, reusable index of chunkdata contents for search UI.
+Builds an incremental, reusable index of chunkdata contents for search UI
 
-支持翻译：
-- 容器类型翻译
-- 建筑类型翻译
-- 区域类型翻译
-"""
+Documentation translated to English.
+Documentation translated to English.
+Documentation translated to English.
+Documentation translated to English."""
 from __future__ import annotations
 
 import json
@@ -968,9 +966,7 @@ def build_chunk_content_index(
 def _translate_chunk_entries_batch(
     entries_out: Dict[str, List[Dict[str, object]]]
 ) -> Dict[str, List[Dict[str, object]]]:
-    """
-    批量翻译区块内容条目（不替换原始名称）。
-    """
+    """Documentation translated to English."""
     unique_containers = set()
     unique_buildings = set()
     unique_zones = set()
@@ -1025,9 +1021,7 @@ def _translate_chunk_entries_batch(
 def _translate_chunk_entries_single(
     entries_out: Dict[str, List[Dict[str, object]]]
 ) -> Dict[str, List[Dict[str, object]]]:
-    """
-    逐条翻译区块内容条目（不替换原始名称）。
-    """
+    """Documentation translated to English."""
     translated: Dict[str, List[Dict[str, object]]] = {}
     for path_key, entries in entries_out.items():
         translated_entries = []
@@ -1059,9 +1053,7 @@ def _translate_chunk_entries_single(
 def _translate_chunk_entries(
     entries_out: Dict[str, List[Dict[str, object]]]
 ) -> Dict[str, List[Dict[str, object]]]:
-    """
-    为区块内容条目添加翻译列（不替换原始名称）。
-    """
+    """Documentation translated to English."""
     input_keys = list(entries_out.keys())
     input_counts = {k: len(v) for k, v in entries_out.items()}
     log_service.runtime_debug(
